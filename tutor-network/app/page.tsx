@@ -1,8 +1,17 @@
 import { redirect } from "next/navigation";
+import { createClient } from "@/lib/supabase/server";
 
-export default function Home() {
-  // TODO: Check if user is logged in (locked in)
-  // If logged in, redirect to dashboard instead
-  // For now, redirect everyone to login
-  redirect("/login");
+export default async function Home() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    // User is not logged in, redirect to login
+    redirect("/Routes");
+  }
+
+  // User is logged in, redirect to student home page
+  redirect("/student-home");
 }
