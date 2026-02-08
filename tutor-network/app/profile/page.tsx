@@ -35,7 +35,6 @@ export default function ProfilePage() {
     username: "",
     bio: "",
     avatar_url: "",
-    user_type: "" as "" | "student" | "tutor",
   });
   const [selectedSubtopics, setSelectedSubtopics] = useState<TutorSubjectRow[]>(
     []
@@ -72,11 +71,26 @@ export default function ProfilePage() {
         full_name: u.user_metadata?.full_name ?? "",
       }));
 
-      const { data: p } = await supabase
+      let { data: p } = await supabase
         .from("profiles")
         .select("id, email, full_name, username, bio, avatar_url, user_type")
         .eq("id", u.id)
         .single();
+
+      // Sync user_type from signup metadata into profile if missing (e.g. trigger didn't set it)
+      const metaType = u.user_metadata?.user_type as string | undefined;
+      if (p && !p.user_type && (metaType === "tutor" || metaType === "student")) {
+        await supabase
+          .from("profiles")
+          .update({ user_type: metaType })
+          .eq("id", u.id);
+        const { data: updated } = await supabase
+          .from("profiles")
+          .select("id, email, full_name, username, bio, avatar_url, user_type")
+          .eq("id", u.id)
+          .single();
+        p = updated ?? p;
+      }
 
       if (p) {
         setProfile(p);
@@ -85,7 +99,6 @@ export default function ProfilePage() {
           username: p.username ?? "",
           bio: p.bio ?? "",
           avatar_url: p.avatar_url ?? "",
-          user_type: (p.user_type as "" | "student" | "tutor") ?? "",
         });
         if (p.user_type === "tutor") {
           const { data: ts } = await supabase
@@ -98,7 +111,6 @@ export default function ProfilePage() {
         setForm((prev) => ({
           ...prev,
           full_name: prev.full_name || (u.user_metadata?.full_name ?? ""),
-          user_type: prev.user_type || "",
         }));
       }
       setLoading(false);
@@ -121,7 +133,6 @@ export default function ProfilePage() {
           username: form.username || null,
           bio: form.bio || null,
           avatar_url: form.avatar_url || null,
-          user_type: form.user_type || null,
           updated_at: new Date().toISOString(),
         },
         { onConflict: "id" }
@@ -131,7 +142,9 @@ export default function ProfilePage() {
       setMessage(error.message);
       return;
     }
-    if (form.user_type === "tutor") {
+    const isTutor =
+      profile?.user_type === "tutor" || user?.user_metadata?.user_type === "tutor";
+    if (isTutor) {
       const { error: delErr } = await supabase
         .from("tutor_subjects")
         .delete()
@@ -244,40 +257,6 @@ export default function ProfilePage() {
           </div>
 
           <div>
-            <label className="mb-1 block text-sm font-medium text-zinc-700">
-              I am a
-            </label>
-            <div className="flex gap-4">
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name="user_type"
-                  value="student"
-                  checked={form.user_type === "student"}
-                  onChange={() =>
-                    setForm((prev) => ({ ...prev, user_type: "student" }))
-                  }
-                  className="text-primary focus:ring-primary"
-                />
-                <span className="text-sm">Student</span>
-              </label>
-              <label className="flex items-center gap-2">
-                <input
-                  type="radio"
-                  name="user_type"
-                  value="tutor"
-                  checked={form.user_type === "tutor"}
-                  onChange={() =>
-                    setForm((prev) => ({ ...prev, user_type: "tutor" }))
-                  }
-                  className="text-primary focus:ring-primary"
-                />
-                <span className="text-sm">Tutor</span>
-              </label>
-            </div>
-          </div>
-
-          <div>
             <label
               htmlFor="username"
               className="mb-1 block text-sm font-medium text-zinc-700"
@@ -334,7 +313,7 @@ export default function ProfilePage() {
             />
           </div>
 
-          {form.user_type === "tutor" && (
+          {(profile?.user_type === "tutor" || user?.user_metadata?.user_type === "tutor") && (
             <div>
               <label className="mb-1 block text-sm font-medium text-zinc-700">
                 Subjects I teach

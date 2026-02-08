@@ -66,6 +66,9 @@ export default function LoginPage() {
       setName("");
       setConfirmPassword("");
       setUserType("");
+      // Redirect to home (if email confirmation is off they're logged in; if on, home may redirect to login)
+      router.push("/");
+      router.refresh();
     }
   };
 

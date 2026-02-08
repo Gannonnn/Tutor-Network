@@ -108,13 +108,26 @@ create policy "Tutor or student can update own bookings"
   with check (auth.uid() = tutor_id or auth.uid() = student_id);
 
 -- -----------------------------------------------------------------------------
--- 4. Allow reading all profiles (for dashboard tutor/student lists)
+-- 4. Profiles RLS (read all; users can insert/update own row only)
 -- -----------------------------------------------------------------------------
+alter table public.profiles enable row level security;
+
 -- Dashboard needs to list tutors (for students) and students (for tutors).
--- If you already have a policy that allows this, skip the next line or drop it first.
 create policy "profiles_select_all_for_lists"
   on public.profiles for select
   using (true);
+
+-- Users can insert/update their own profile. If you get RLS errors on profile
+-- save, run supabase/fix-profiles-rls.sql in the SQL Editor (it uses
+-- drop policy if exists then create, so it fixes conflicting or missing policies).
+create policy "profiles_insert_own"
+  on public.profiles for insert
+  with check (auth.uid() = id);
+
+create policy "profiles_update_own"
+  on public.profiles for update
+  using (auth.uid() = id)
+  with check (auth.uid() = id);
 
 -- -----------------------------------------------------------------------------
 -- 5. (Optional) Sync user_type from signup into profiles
