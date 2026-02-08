@@ -4,6 +4,9 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import NavBar from "../components/NavBar";
 import { createClient } from "@/lib/supabase/client";
+import { SUBJECTS } from "@/lib/subjects";
+
+const CORE_SUBJECTS = Object.values(SUBJECTS);
 
 // Placeholder images for cards
 const imageFor = (title) => {
@@ -318,22 +321,23 @@ export default function StudentHome() {
                   className="flex gap-4 overflow-x-auto scrollbar-hide scroll-smooth"
                   style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
                 >
-                  {["Math","Science","English","History","Foreign Languages","Arts"].map((title, idx) => (
-                    <div
-                      key={idx}
-                      className="flex-shrink-0 w-64 h-48 rounded-xl border border-zinc-200 bg-white shadow-sm hover:shadow-md transition-shadow cursor-pointer overflow-hidden"
+                  {CORE_SUBJECTS.map((subject) => (
+                    <Link
+                      key={subject.slug}
+                      href={`/subject/${subject.slug}`}
+                      className="flex-shrink-0 w-64 h-48 rounded-xl border border-zinc-200 bg-white shadow-sm hover:shadow-md transition-shadow cursor-pointer overflow-hidden block"
                     >
                       <div className="h-32 bg-zinc-100 flex items-center justify-center relative">
                         <img
-                          src={imageFor(title)}
-                          alt={title}
+                          src={imageFor(subject.title)}
+                          alt={subject.title}
                           className="w-full h-full object-cover"
                         />
                       </div>
                       <div className="p-4">
-                        <h3 className="text-lg font-medium text-zinc-900">{title}</h3>
+                        <h3 className="text-lg font-medium text-zinc-900">{subject.title}</h3>
                       </div>
-                    </div>
+                    </Link>
                   ))}
                 </div>
 
