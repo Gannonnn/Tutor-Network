@@ -6,9 +6,22 @@ export async function updateSession(request: NextRequest) {
     request,
   });
 
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.trim();
+  const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY?.trim();
+
+  if (!supabaseUrl || !supabaseAnonKey) {
+    console.error("Missing Supabase environment variables. URL:", supabaseUrl ? "exists" : "missing", "KEY:", supabaseAnonKey ? "exists" : "missing");
+    return supabaseResponse;
+  }
+
+  if (!supabaseUrl.startsWith("http://") && !supabaseUrl.startsWith("https://")) {
+    console.error(`Invalid Supabase URL format: "${supabaseUrl}" (length: ${supabaseUrl.length})`);
+    return supabaseResponse;
+  }
+
   const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    supabaseUrl,
+    supabaseAnonKey,
     {
       cookies: {
         getAll() {
