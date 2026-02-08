@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import NavBar from "../components/NavBar";
 import BookingModal from "../components/BookingModal";
 import { createClient } from "@/lib/supabase/client";
@@ -15,6 +16,7 @@ const tutorShape = (p) => ({
 });
 
 export default function SubjectPage({ slug }) {
+  const router = useRouter();
   const subjectConfig = getSubjectBySlug(slug);
   const coreSubject = subjectConfig?.title ?? "";
   const subSubjects = subjectConfig?.subtopics ?? [];
@@ -54,10 +56,33 @@ export default function SubjectPage({ slug }) {
   useEffect(() => {
     const loadUser = async () => {
       const { data: { user: u } } = await supabase.auth.getUser();
+      if (!u) return;
+      
+      // Check if user is a tutor - tutors cannot access subject pages
+      const userType = u.user_metadata?.user_type;
+      if (userType === "tutor") {
+        router.push("/dashboard");
+        return;
+      }
+      
+      // Also check profile if not in metadata
+      if (!userType) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("user_type")
+          .eq("id", u.id)
+          .single();
+        
+        if (profile?.user_type === "tutor") {
+          router.push("/dashboard");
+          return;
+        }
+      }
+      
       setUser(u);
     };
     loadUser();
-  }, [supabase]);
+  }, [supabase, router]);
 
   const listRef = useRef(null);
   const scrollList = (direction) => {
