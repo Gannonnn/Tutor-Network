@@ -94,14 +94,24 @@ export default function SubjectPage({ slug }) {
     if (!selectedId && subSubjects[0]) setSelectedId(subSubjects[0].id);
   }, [selectedId, subSubjects]);
 
+  useEffect(() => {
+    // Prevent body scrolling
+    document.body.style.overflow = 'hidden';
+    
+    return () => {
+      // Restore body scrolling when component unmounts
+      document.body.style.overflow = 'unset';
+    };
+  }, []);
+
   if (!subjectConfig) return null;
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="fixed inset-0 bg-white overflow-hidden flex flex-col">
       <NavBar contextLabel={coreSubject ? `Core: ${coreSubject}` : undefined} />
 
-      <main className="pt-14">
-        <div className="grid grid-cols-12 gap-6 px-6 pb-6 pt-0">
+      <main className="flex-1 pt-14 overflow-y-auto min-h-0">
+        <div className="grid grid-cols-12 gap-6 px-6 pb-6 pt-6">
           <aside className="col-span-12 md:col-span-3">
             <div className="flex items-center justify-between mb-2">
               <h2 className="text-lg font-semibold text-zinc-900">{coreSubject} Topics</h2>

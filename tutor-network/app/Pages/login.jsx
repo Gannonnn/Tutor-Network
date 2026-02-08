@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
@@ -14,6 +14,16 @@ export default function LoginPage() {
   const [userType, setUserType] = useState(""); // "student" | "tutor" | ""
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    // Prevent body scrolling
+    document.body.style.overflow = 'hidden';
+    
+    return () => {
+      // Restore body scrolling when component unmounts
+      document.body.style.overflow = 'unset';
+    };
+  }, []);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -73,7 +83,7 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-white px-4">
+    <div className="fixed inset-0 bg-white overflow-hidden flex items-center justify-center px-4">
       <div className="w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm">
         <div className="mb-8 text-center">
           <h1 className="text-2xl font-[family-name:var(--font-orbitron)] tracking-tight text-zinc-900">

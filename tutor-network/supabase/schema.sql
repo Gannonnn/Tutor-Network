@@ -113,6 +113,10 @@ create policy "Tutor or student can update own bookings"
   using (auth.uid() = tutor_id or auth.uid() = student_id)
   with check (auth.uid() = tutor_id or auth.uid() = student_id);
 
+create policy "Tutor or student can delete own bookings"
+  on public.bookings for delete
+  using (auth.uid() = tutor_id or auth.uid() = student_id);
+
 -- -----------------------------------------------------------------------------
 -- 4. Profiles RLS (read all; users can insert/update own row only)
 -- -----------------------------------------------------------------------------

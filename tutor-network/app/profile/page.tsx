@@ -57,6 +57,16 @@ export default function ProfilePage() {
   }, [allSubtopics, selectedSubtopics]);
 
   useEffect(() => {
+    // Prevent body scrolling
+    document.body.style.overflow = 'hidden';
+    
+    return () => {
+      // Restore body scrolling when component unmounts
+      document.body.style.overflow = 'unset';
+    };
+  }, []);
+
+  useEffect(() => {
     const loadUserAndProfile = async () => {
       const {
         data: { user: u },
@@ -211,8 +221,9 @@ export default function ProfilePage() {
   }
 
   return (
-    <main className="min-h-screen bg-background">
-      <div className="mx-auto max-w-xl px-6 py-16">
+    <main className="fixed inset-0 bg-background overflow-hidden flex flex-col">
+      <div className="flex-1 overflow-y-auto min-h-0">
+        <div className="mx-auto max-w-xl px-6 py-16">
         <h1 className="text-2xl font-semibold text-foreground mb-6">
           Profile
         </h1>
@@ -314,14 +325,34 @@ export default function ProfilePage() {
           </div>
 
           {(profile?.user_type === "tutor" || user?.user_metadata?.user_type === "tutor") && (
-            <div>
-              <label className="mb-1 block text-sm font-medium text-zinc-700">
-                Subjects I teach
-              </label>
-              <p className="mb-2 text-xs text-zinc-500">
-                Search and add the subjects/topics you teach. Students will see
-                you on subject pages when they match.
-              </p>
+            <>
+              {/* Display current subjects */}
+              {selectedAsOptions.length > 0 && (
+                <div className="mb-4">
+                  <h3 className="mb-2 text-sm font-medium text-zinc-700">
+                    My Teaching Subjects
+                  </h3>
+                  <div className="flex flex-wrap gap-1.5">
+                    {selectedAsOptions.map((opt) => (
+                      <span
+                        key={`${opt.subject_slug}:${opt.subtopic_id}`}
+                        className="inline-flex items-center rounded bg-primary/15 px-2 py-0.5 text-xs text-foreground"
+                      >
+                        {opt.subject_title} → {opt.subtopic_title}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <label className="mb-1 block text-sm font-medium text-zinc-700">
+                  Add or Remove Subjects
+                </label>
+                <p className="mb-2 text-xs text-zinc-500">
+                  Search and add the subjects/topics you teach. Students will see
+                  you on subject pages when they match.
+                </p>
               <input
                 type="search"
                 value={subjectSearch}
@@ -386,7 +417,8 @@ export default function ProfilePage() {
                   ))}
                 </div>
               )}
-            </div>
+              </div>
+            </>
           )}
 
           {message && (
@@ -427,6 +459,7 @@ export default function ProfilePage() {
             Back to home
           </Link>
         </p>
+        </div>
       </div>
     </main>
   );

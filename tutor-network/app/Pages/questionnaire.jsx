@@ -62,6 +62,16 @@ export default function QuestionnairePage() {
   const [extraNotes, setExtraNotes] = useState("");
 
   useEffect(() => {
+    // Prevent body scrolling
+    document.body.style.overflow = 'hidden';
+    
+    return () => {
+      // Restore body scrolling when component unmounts
+      document.body.style.overflow = 'unset';
+    };
+  }, []);
+
+  useEffect(() => {
     const init = async () => {
       setLoading(true);
       setError("");
@@ -159,9 +169,9 @@ export default function QuestionnairePage() {
   };
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="fixed inset-0 bg-white overflow-hidden flex flex-col">
       <NavBar />
-      <main className="pt-14">
+      <main className="flex-1 pt-14 overflow-y-auto min-h-0">
         <div className="max-w-3xl mx-auto px-6 pb-10 pt-0">
           <h1 className="text-2xl font-semibold text-zinc-900 mb-1">Student Questionnaire</h1>
           <p className="text-sm text-zinc-600 mb-6">Answer a few questions so we can tailor your learning experience.</p>

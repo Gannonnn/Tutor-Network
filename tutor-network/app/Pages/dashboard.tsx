@@ -6,6 +6,8 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import type { AuthUser } from "@supabase/supabase-js";
 import BookingModal from "@/app/components/BookingModal";
+import AvailabilityModal from "@/app/components/AvailabilityModal";
+import ConfirmModal from "@/app/components/ConfirmModal";
 
 type Availability = {
   id: string;
@@ -18,6 +20,7 @@ type Availability = {
     avatar_url?: string;
     email?: string;
   };
+  slotsWithStatus?: Array<{ time: string; booked: boolean }>; // Optional: booking status for each slot
 };
 
 type Booking = {
@@ -73,8 +76,33 @@ export default function DashboardPage() {
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string>("");
   const [bookingModalTutor, setBookingModalTutor] = useState<Tutor | null>(null);
+  const [showAvailabilityModal, setShowAvailabilityModal] = useState(false);
+  const [confirmModal, setConfirmModal] = useState<{
+    isOpen: boolean;
+    title: string;
+    message: string;
+    confirmText?: string;
+    cancelText?: string;
+    onConfirm: () => void;
+    variant?: "danger" | "default";
+  }>({
+    isOpen: false,
+    title: "",
+    message: "",
+    onConfirm: () => {},
+  });
 
   const supabase = createClient();
+
+  useEffect(() => {
+    // Prevent body scrolling
+    document.body.style.overflow = 'hidden';
+    
+    return () => {
+      // Restore body scrolling when component unmounts
+      document.body.style.overflow = 'unset';
+    };
+  }, []);
 
   useEffect(() => {
     const loadUser = async () => {
@@ -238,7 +266,7 @@ export default function DashboardPage() {
     
     setEvents(formattedEvents);
     
-    // Also load availabilities for the tutor
+    // Load ALL availabilities (including booked slots) for tutor's own view
     const { data: availabilitiesData, error: availError } = await supabaseClient
       .from("availabilities")
       .select("*")
@@ -247,6 +275,22 @@ export default function DashboardPage() {
       .order("date", { ascending: true });
     
     if (!availError && availabilitiesData) {
+      // Get all confirmed bookings to mark which slots are booked
+      const { data: tutorBookings } = await supabaseClient
+        .from("bookings")
+        .select("date, time")
+        .eq("tutor_id", tutorId)
+        .eq("status", "confirmed");
+      
+      // Create a map of booked slots: key = "date:time", value = true
+      const bookedSlotsMap = new Map<string, boolean>();
+      (tutorBookings || []).forEach((booking: any) => {
+        const key = `${booking.date}:${booking.time}`;
+        bookedSlotsMap.set(key, true);
+      });
+      
+      // Keep all availabilities with all slots (for tutor's own view)
+      // Don't filter - show all slots so tutor can see what they set
       setAvailabilities(availabilitiesData);
     }
   };
@@ -258,48 +302,166 @@ export default function DashboardPage() {
     // Show events for that day
   };
 
-  const handleCreateAvailability = async () => {
+  const handleCreateAvailabilityClick = () => {
+    setShowAvailabilityModal(true);
+  };
+
+  const handleDeleteAvailability = (availabilityId: string) => {
+    if (!user || userType !== "tutor") return;
+    
+    setConfirmModal({
+      isOpen: true,
+      title: "Delete Availability",
+      message: "Are you sure you want to delete this availability? This will cancel any pending bookings for these time slots.",
+      confirmText: "Delete",
+      cancelText: "Cancel",
+      variant: "danger",
+      onConfirm: async () => {
+        setConfirmModal({ ...confirmModal, isOpen: false });
+        
+        const { error } = await supabase
+          .from("availabilities")
+          .delete()
+          .eq("id", availabilityId)
+          .eq("tutor_id", user.id);
+
+        if (error) {
+          alert(`Error deleting availability: ${error.message}`);
+          return;
+        }
+
+        // Reload availabilities
+        if (user) {
+          await loadTutorEvents(supabase, user.id);
+        }
+        
+        alert("Availability deleted successfully.");
+      },
+    });
+  };
+
+  const handleDeleteTimeSlot = (availabilityId: string, timeSlot: string, isBooked: boolean) => {
+    if (!user || userType !== "tutor") return;
+
+    if (isBooked) {
+      alert("Cannot delete a time slot that is already booked. Please cancel the booking first.");
+      return;
+    }
+
+    setConfirmModal({
+      isOpen: true,
+      title: "Remove Time Slot",
+      message: `Are you sure you want to remove ${timeSlot} from your availability?`,
+      confirmText: "Remove",
+      cancelText: "Cancel",
+      variant: "danger",
+      onConfirm: async () => {
+        setConfirmModal({ ...confirmModal, isOpen: false });
+        
+        // Get current availability
+        const { data: availability, error: fetchError } = await supabase
+          .from("availabilities")
+          .select("time_slots")
+          .eq("id", availabilityId)
+          .eq("tutor_id", user.id)
+          .single();
+
+        if (fetchError || !availability) {
+          alert("Error loading availability. Please try again.");
+          return;
+        }
+
+        // Remove the time slot and sort remaining slots
+        const updatedSlots = sortTimeSlots(
+          availability.time_slots.filter((slot: string) => slot !== timeSlot)
+        );
+
+        // If no slots left, delete the availability, otherwise update it
+        if (updatedSlots.length === 0) {
+          const { error: deleteError } = await supabase
+            .from("availabilities")
+            .delete()
+            .eq("id", availabilityId)
+            .eq("tutor_id", user.id);
+
+          if (deleteError) {
+            alert(`Error deleting availability: ${deleteError.message}`);
+            return;
+          }
+        } else {
+          const { error: updateError } = await supabase
+            .from("availabilities")
+            .update({ time_slots: updatedSlots })
+            .eq("id", availabilityId)
+            .eq("tutor_id", user.id);
+
+          if (updateError) {
+            alert(`Error updating availability: ${updateError.message}`);
+            return;
+          }
+        }
+
+        // Reload availabilities
+        if (user) {
+          await loadTutorEvents(supabase, user.id);
+        }
+      },
+    });
+  };
+
+  const handleCreateAvailability = async (selectedSlots: string[]) => {
     if (!user || userType !== "tutor") return;
     
     const dateStr = selectedDate.toISOString().split("T")[0];
     
+    // Sort the selected slots chronologically
+    const sortedSlots = sortTimeSlots(selectedSlots);
+    
     // Check if availability already exists for this date
     const { data: existing } = await supabase
       .from("availabilities")
-      .select("id")
+      .select("id, time_slots")
       .eq("tutor_id", user.id)
       .eq("date", dateStr)
-      .single();
+      .maybeSingle();
     
     if (existing) {
-      alert("Availability already exists for this date. Please select a different date.");
-      return;
-    }
-    
-    // Default time slots (can be customized later)
-    const defaultTimeSlots = [
-      "9:00 AM", "10:00 AM", "11:00 AM", 
-      "1:00 PM", "2:00 PM", "3:00 PM", "4:00 PM"
-    ];
-    
-    const { data, error } = await supabase
-      .from("availabilities")
-      .insert({
-        tutor_id: user.id,
-        date: dateStr,
-        time_slots: defaultTimeSlots,
-      })
-      .select()
-      .single();
-    
-    if (error) {
-      alert(`Error creating availability: ${error.message}`);
-      return;
+      // Merge with existing time slots, avoiding duplicates, then sort
+      const existingSlots = existing.time_slots || [];
+      const mergedSlots = sortTimeSlots([...new Set([...existingSlots, ...sortedSlots])]);
+      
+      const { error } = await supabase
+        .from("availabilities")
+        .update({ time_slots: mergedSlots })
+        .eq("id", existing.id);
+      
+      if (error) {
+        alert(`Error updating availability: ${error.message}`);
+        return;
+      }
+      
+      alert(`Availability updated for ${formatDateString(dateStr)}`);
+    } else {
+      // Create new availability with sorted slots
+      const { error } = await supabase
+        .from("availabilities")
+        .insert({
+          tutor_id: user.id,
+          date: dateStr,
+          time_slots: sortedSlots,
+        });
+      
+      if (error) {
+        alert(`Error creating availability: ${error.message}`);
+        return;
+      }
+      
+      alert(`Availability created for ${formatDateString(dateStr)}`);
     }
     
     // Reload availabilities and events
     if (user) await loadTutorEvents(supabase, user.id);
-    alert(`Availability created for ${selectedDate.toLocaleDateString()}`);
+    setShowAvailabilityModal(false);
   };
 
   const handleAcceptAvailability = async (availabilityId: string, timeSlot: string) => {
@@ -308,12 +470,35 @@ export default function DashboardPage() {
     // Get the availability to find the tutor_id
     const { data: availability, error: availError } = await supabase
       .from("availabilities")
-      .select("tutor_id, date")
+      .select("tutor_id, date, time_slots")
       .eq("id", availabilityId)
       .single();
     
     if (availError || !availability) {
       alert("Error loading availability. Please try again.");
+      return;
+    }
+
+    // Check if the time slot is still available
+    if (!availability.time_slots.includes(timeSlot)) {
+      alert("This time slot is no longer available. Please select another time.");
+      await loadStudentAvailabilities(supabase, user.id);
+      return;
+    }
+    
+    // Check if a booking already exists for this tutor, date, and time
+    const { data: existingBooking } = await supabase
+      .from("bookings")
+      .select("id")
+      .eq("tutor_id", availability.tutor_id)
+      .eq("date", availability.date)
+      .eq("time", timeSlot)
+      .eq("status", "confirmed")
+      .maybeSingle();
+    
+    if (existingBooking) {
+      alert("This time slot is already booked. Please select another time.");
+      await loadStudentAvailabilities(supabase, user.id);
       return;
     }
     
@@ -393,16 +578,37 @@ export default function DashboardPage() {
       console.error("Error loading availabilities:", error);
       return;
     }
+
+    // Get all confirmed bookings to filter out booked slots
+    const { data: bookingsData } = await supabaseClient
+      .from("bookings")
+      .select("availability_id, date, time, tutor_id")
+      .eq("status", "confirmed");
     
-    // Transform the data to match Availability type
-    const formattedAvailabilities: Availability[] = (availabilitiesData || []).map((avail: any) => ({
-      id: avail.id,
-      tutor_id: avail.tutor_id,
-      date: avail.date,
-      time_slots: avail.time_slots,
-      created_at: avail.created_at,
-      tutor: Array.isArray(avail.tutor) ? avail.tutor[0] : avail.tutor,
-    }));
+    // Create a map of booked slots: key = "tutor_id:date:time", value = true
+    const bookedSlotsMap = new Map<string, boolean>();
+    (bookingsData || []).forEach((booking: any) => {
+      const key = `${booking.tutor_id}:${booking.date}:${booking.time}`;
+      bookedSlotsMap.set(key, true);
+    });
+    
+    // Transform the data and filter out booked slots
+    const formattedAvailabilities: Availability[] = (availabilitiesData || []).map((avail: any) => {
+      // Filter out time slots that are already booked
+      const availableSlots = avail.time_slots.filter((slot: string) => {
+        const key = `${avail.tutor_id}:${avail.date}:${slot}`;
+        return !bookedSlotsMap.has(key);
+      });
+      
+      return {
+        id: avail.id,
+        tutor_id: avail.tutor_id,
+        date: avail.date,
+        time_slots: availableSlots,
+        created_at: avail.created_at,
+        tutor: Array.isArray(avail.tutor) ? avail.tutor[0] : avail.tutor,
+      };
+    }).filter((avail: Availability) => avail.time_slots.length > 0); // Only include availabilities with available slots
     
     setAvailabilities(formattedAvailabilities);
   };
@@ -439,6 +645,198 @@ export default function DashboardPage() {
     return availabilities.filter((a) => a.date === dateStr);
   };
 
+  // Helper function to format date string without timezone conversion issues
+  const formatDateString = (dateStr: string): string => {
+    // Parse YYYY-MM-DD format directly without timezone conversion
+    const [year, month, day] = dateStr.split("-").map(Number);
+    const date = new Date(year, month - 1, day);
+    return date.toLocaleDateString("en-US", {
+      month: "short",
+      day: "numeric",
+      year: "numeric",
+    });
+  };
+
+  // Helper function to sort time slots chronologically
+  const sortTimeSlots = (slots: string[]): string[] => {
+    return [...slots].sort((a, b) => {
+      // Convert "9:00 AM" format to minutes since midnight for comparison
+      const parseTime = (timeStr: string): number => {
+        const [time, period] = timeStr.split(" ");
+        const [hourStr, minuteStr] = time.split(":");
+        let hour = parseInt(hourStr, 10);
+        const minute = parseInt(minuteStr || "0", 10);
+        
+        if (period === "PM" && hour !== 12) {
+          hour += 12;
+        } else if (period === "AM" && hour === 12) {
+          hour = 0;
+        }
+        
+        return hour * 60 + minute;
+      };
+      
+      return parseTime(a) - parseTime(b);
+    });
+  };
+
+  const handleDeleteMeeting = (event: Event) => {
+    if (!user || !event.booking_id) {
+      alert("Missing user or booking ID. Please try again.");
+      return;
+    }
+    
+    setConfirmModal({
+      isOpen: true,
+      title: "Cancel Meeting",
+      message: `Are you sure you want to cancel this meeting on ${formatDateString(event.date)} at ${event.time}?`,
+      confirmText: "Cancel Meeting",
+      cancelText: "Keep Meeting",
+      variant: "danger",
+      onConfirm: async () => {
+        setConfirmModal({ ...confirmModal, isOpen: false });
+        
+        await performDeleteMeeting(event);
+      },
+    });
+  };
+
+  const performDeleteMeeting = async (event: Event) => {
+    if (!user || !event.booking_id) return;
+
+    console.log("Deleting meeting:", { eventId: event.id, bookingId: event.booking_id, userId: user.id });
+
+    // Get the booking to find availability_id
+    const { data: booking, error: bookingError } = await supabase
+      .from("bookings")
+      .select("availability_id, date, time, tutor_id, student_id")
+      .eq("id", event.booking_id)
+      .single();
+
+    if (bookingError || !booking) {
+      console.error("Error loading booking:", bookingError);
+      alert(`Error loading booking: ${bookingError?.message || "Booking not found"}. Please try again.`);
+      return;
+    }
+
+    console.log("Found booking:", booking);
+
+    // Verify user has permission to delete (must be tutor or student for this booking)
+    if (booking.tutor_id !== user.id && booking.student_id !== user.id) {
+      alert("You don't have permission to delete this booking.");
+      return;
+    }
+
+    // Optimistically remove event from UI immediately
+    setEvents((prevEvents) => {
+      const filtered = prevEvents.filter((e) => e.id !== event.id && e.booking_id !== event.booking_id);
+      console.log("Optimistic update - events before:", prevEvents.length, "after:", filtered.length);
+      return filtered;
+    });
+    setSelectedEvent(null);
+
+    // Delete the booking
+    const { data: deleteData, error: deleteError } = await supabase
+      .from("bookings")
+      .delete()
+      .eq("id", event.booking_id)
+      .select();
+
+    console.log("Delete result:", { deleteData, deleteError });
+
+    if (deleteError) {
+      console.error("Error deleting booking:", deleteError);
+      // Reload events to restore the correct state
+      if (user) {
+        if (userType === "student") {
+          await loadStudentEvents(supabase, user.id);
+        } else if (userType === "tutor") {
+          await loadTutorEvents(supabase, user.id);
+        }
+      }
+      alert(`Error deleting booking: ${deleteError.message}. Please check your database permissions.`);
+      return;
+    }
+
+    // Verify deletion succeeded
+    if (!deleteData || deleteData.length === 0) {
+      console.error("No rows deleted - booking may not exist or RLS policy blocked deletion");
+      console.error("This usually means the DELETE policy is missing. Run this SQL in Supabase:");
+      console.error(`
+create policy "Tutor or student can delete own bookings"
+  on public.bookings for delete
+  using (auth.uid() = tutor_id or auth.uid() = student_id);
+      `);
+      // Reload events to restore the correct state
+      if (user) {
+        if (userType === "student") {
+          await loadStudentEvents(supabase, user.id);
+        } else if (userType === "tutor") {
+          await loadTutorEvents(supabase, user.id);
+        }
+      }
+      alert("Failed to delete booking. This is likely a database permissions issue. Please check the browser console for instructions on how to fix this.");
+      return;
+    }
+
+    console.log("Booking deleted successfully, restoring availability slot");
+
+    // Restore the time slot to availability if availability_id exists
+    if (booking.availability_id) {
+      const { data: availability, error: availError } = await supabase
+        .from("availabilities")
+        .select("id, time_slots")
+        .eq("id", booking.availability_id)
+        .single();
+
+      if (!availError && availability) {
+        // Add the time slot back if it's not already there
+        if (!availability.time_slots.includes(booking.time)) {
+          const updatedSlots = [...availability.time_slots, booking.time].sort();
+          const { error: updateError } = await supabase
+            .from("availabilities")
+            .update({ time_slots: updatedSlots })
+            .eq("id", booking.availability_id);
+          
+          if (updateError) {
+            console.error("Error updating availability:", updateError);
+          }
+        }
+      } else {
+        // Availability doesn't exist, create it
+        const { error: insertError } = await supabase
+          .from("availabilities")
+          .insert({
+            tutor_id: booking.tutor_id,
+            date: booking.date,
+            time_slots: [booking.time],
+          });
+        
+        if (insertError) {
+          console.error("Error creating availability:", insertError);
+        }
+      }
+    }
+
+    // Reload events and availabilities to ensure consistency
+    try {
+      if (user) {
+        if (userType === "student") {
+          await loadStudentEvents(supabase, user.id);
+          await loadStudentAvailabilities(supabase, user.id);
+        } else if (userType === "tutor") {
+          await loadTutorEvents(supabase, user.id);
+        }
+      }
+      console.log("Events reloaded successfully");
+    } catch (reloadError) {
+      console.error("Error reloading events:", reloadError);
+      // Don't show error to user since deletion succeeded
+    }
+    
+    alert("Meeting cancelled successfully.");
+  };
+
   const sortedEvents = [...events].sort((a, b) => {
     const dateA = new Date(`${a.date}T${a.time}`);
     const dateB = new Date(`${b.date}T${b.time}`);
@@ -459,8 +857,8 @@ export default function DashboardPage() {
   const selectedDateAvailabilities = getAvailabilitiesForDate(selectedDate);
 
   return (
-    <main className="h-screen bg-background overflow-hidden flex flex-col">
-      <div className="flex-1 p-3 overflow-hidden flex flex-col">
+    <main className="fixed inset-0 bg-background overflow-hidden flex flex-col pt-14">
+      <div className="flex-1 p-3 pt-2 overflow-hidden flex flex-col min-h-0">
 
         <div className="grid grid-cols-12 gap-3 flex-1 min-h-0">
           {/* Left Side - Calendar and Events */}
@@ -553,12 +951,12 @@ export default function DashboardPage() {
             </div>
 
             {/* Events List - Bottom 1/3 */}
-            <div className="bg-white rounded-lg border border-zinc-200 p-3 flex-1 overflow-y-auto flex flex-col min-h-0">
-              <h3 className="font-semibold mb-2 text-sm">Upcoming Events</h3>
+            <div className="bg-white rounded-lg border border-zinc-200 p-3 flex-1 overflow-hidden flex flex-col min-h-0">
+              <h3 className="font-semibold mb-2 text-sm flex-shrink-0">Upcoming Events</h3>
               {sortedEvents.length === 0 ? (
                 <p className="text-xs text-zinc-500">No upcoming events</p>
               ) : (
-                <div className="space-y-1.5 flex-1 overflow-y-auto">
+                <div className="space-y-1.5 flex-1 overflow-y-auto min-h-0">
                   {sortedEvents.slice(0, 5).map((event) => (
                     <div
                       key={event.id}
@@ -567,7 +965,7 @@ export default function DashboardPage() {
                     >
                       <p className="text-xs font-medium">{event.title}</p>
                       <p className="text-[10px] text-zinc-500">
-                        {new Date(event.date).toLocaleDateString()} at {event.time}
+                        {formatDateString(event.date)} at {event.time}
                       </p>
                     </div>
                   ))}
@@ -577,41 +975,50 @@ export default function DashboardPage() {
           </div>
 
           {/* Middle - Event info (selected event) or prompt + Available Sessions */}
-          <div className="col-span-4 bg-white rounded-lg border border-zinc-200 p-4 overflow-y-auto h-full flex flex-col min-h-0">
+          <div className="col-span-4 bg-white rounded-lg border border-zinc-200 p-4 h-full flex flex-col min-h-0 overflow-hidden">
             <h2 className="text-lg font-semibold mb-3 flex-shrink-0">Event info</h2>
 
             {selectedEvent ? (
               <>
-                <div className="p-3 border border-zinc-200 rounded-lg space-y-2 flex-1">
+                <div className="p-3 border border-zinc-200 rounded-lg space-y-2 flex-1 min-h-0 overflow-y-auto">
                   <p className="text-sm font-medium">{selectedEvent.title}</p>
                   <p className="text-xs text-zinc-600">
                     With: {selectedEvent.other_name ?? (userType === "student" ? "Tutor" : "Student")}
                   </p>
                   <p className="text-xs text-zinc-600">
-                    When: {new Date(selectedEvent.date).toLocaleDateString()} at {selectedEvent.time}
+                    When: {formatDateString(selectedEvent.date)} at {selectedEvent.time}
                   </p>
                   {(selectedEvent.subtopic_title || selectedEvent.subject_slug) && (
                     <p className="text-xs text-zinc-600">
                       Topic: {selectedEvent.subtopic_title ?? selectedEvent.subject_slug ?? "—"}
                     </p>
                   )}
-                  <Link
-                    href={`/session/${selectedEvent.booking_id ?? selectedEvent.id}`}
-                    className="inline-flex items-center gap-2 mt-3 px-3 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:opacity-90"
-                  >
-                    Join session
-                  </Link>
+                  <div className="flex flex-col gap-2 mt-3">
+                    <Link
+                      href={`/session/${selectedEvent.booking_id ?? selectedEvent.id}`}
+                      className="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:opacity-90"
+                    >
+                      Join session
+                    </Link>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteMeeting(selectedEvent)}
+                      className="px-3 py-2 rounded-lg bg-red-600 text-white text-sm font-medium hover:bg-red-700 transition-colors"
+                    >
+                      Cancel Meeting
+                    </button>
+                  </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setSelectedEvent(null)}
-                  className="mt-2 text-sm text-zinc-500 hover:underline"
+                  className="mt-2 text-sm text-zinc-500 hover:underline flex-shrink-0"
                 >
                   Back to calendar
                 </button>
               </>
             ) : (
-              <>
+              <div className="flex-1 min-h-0 overflow-y-auto">
                 <p className="text-sm text-zinc-600 mb-3">
                   {userType === "student"
                     ? "Select an event from Upcoming Events (left) to see details and join the session. Book new sessions from a subject page or via Schedule new times with a current tutor."
@@ -619,20 +1026,103 @@ export default function DashboardPage() {
                 </p>
                 {userType === "student" ? null : (
                 <>
-                  {selectedDateEvents.length === 0 ? (
+                  {/* Show availability for selected date */}
+                  {selectedDateAvailabilities.length > 0 && (
+                    <div className="mb-4 space-y-2">
+                      <h3 className="text-sm font-semibold text-zinc-700">
+                        My Availability for {formatDateString(selectedDate.toISOString().split("T")[0])}
+                      </h3>
+                      {selectedDateAvailabilities.map((avail) => {
+                        // Get booked slots from bookings for this date
+                        const dateStr = selectedDate.toISOString().split("T")[0];
+                        const bookedSlotsSet = new Set(
+                          events
+                            .filter((e) => e.date === dateStr)
+                            .map((e) => e.time)
+                        );
+                        
+                        const allSlots = sortTimeSlots(avail.time_slots || []);
+                        const bookedSlots = sortTimeSlots(allSlots.filter((slot) => bookedSlotsSet.has(slot)));
+                        const availableSlots = sortTimeSlots(allSlots.filter((slot) => !bookedSlotsSet.has(slot)));
+                        
+                        return (
+                          <div key={avail.id} className="p-3 border border-zinc-200 rounded-lg bg-zinc-50">
+                            <div className="flex items-start justify-between mb-2">
+                              <div className="flex-1">
+                                {allSlots.length > 0 && (
+                                  <>
+                                    {availableSlots.length > 0 && (
+                                      <div className="mb-2">
+                                        <p className="text-xs font-medium text-zinc-600 mb-1">Available:</p>
+                                        <div className="flex flex-wrap gap-1.5">
+                                          {availableSlots.map((slot: string) => (
+                                            <span
+                                              key={slot}
+                                              className="inline-flex items-center gap-1 rounded bg-green-100 px-2 py-0.5 text-xs text-green-800"
+                                            >
+                                              {slot}
+                                              <button
+                                                type="button"
+                                                onClick={() => handleDeleteTimeSlot(avail.id, slot, false)}
+                                                className="ml-1 flex items-center justify-center w-4 h-4 rounded-full hover:bg-red-300 hover:text-red-900 transition-colors text-red-700 font-bold text-sm leading-none"
+                                                title={`Remove ${slot}`}
+                                                aria-label={`Remove ${slot}`}
+                                              >
+                                                ×
+                                              </button>
+                                            </span>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+                                    {bookedSlots.length > 0 && (
+                                      <div>
+                                        <p className="text-xs font-medium text-zinc-600 mb-1">Booked:</p>
+                                        <div className="flex flex-wrap gap-1.5">
+                                          {bookedSlots.map((slot: string) => (
+                                            <span
+                                              key={slot}
+                                              className="inline-flex items-center rounded bg-zinc-200 px-2 py-0.5 text-xs text-zinc-600"
+                                            >
+                                              {slot}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+                                  </>
+                                )}
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => handleDeleteAvailability(avail.id)}
+                                className="ml-2 px-2 py-1 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 rounded transition-colors"
+                                title="Delete availability"
+                              >
+                                Delete
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                  
+                  {selectedDateEvents.length === 0 && selectedDateAvailabilities.length === 0 ? (
                     <div className="text-center py-6 flex-1 flex flex-col justify-center">
                       <p className="text-sm text-zinc-500 mb-4">
                         No events scheduled for this day
                       </p>
                       <button
-                        onClick={handleCreateAvailability}
+                        onClick={handleCreateAvailabilityClick}
                         className="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 transition-colors text-sm"
                       >
                         Create Availability
                       </button>
                     </div>
-                  ) : (
-                    <div className="space-y-3 flex-1 overflow-y-auto">
+                  ) : selectedDateEvents.length > 0 ? (
+                    <div className="space-y-3">
+                      <h3 className="text-sm font-semibold text-zinc-700">Scheduled Sessions</h3>
                       {selectedDateEvents.map((event) => (
                         <div
                           key={event.id}
@@ -641,32 +1131,39 @@ export default function DashboardPage() {
                         >
                           <h3 className="font-semibold mb-1 text-sm">{event.title}</h3>
                           <p className="text-xs text-zinc-600">
-                            Date: {new Date(event.date).toLocaleDateString()}
+                            Date: {formatDateString(event.date)}
                           </p>
                           <p className="text-xs text-zinc-600">Time: {event.time}</p>
                         </div>
                       ))}
                       <button
-                        onClick={handleCreateAvailability}
+                        onClick={handleCreateAvailabilityClick}
                         className="w-full px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 transition-colors mt-3 text-sm"
                       >
                         Create Availability
                       </button>
                     </div>
+                  ) : (
+                    <button
+                      onClick={handleCreateAvailabilityClick}
+                      className="w-full px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 transition-colors text-sm"
+                    >
+                      Create Availability
+                    </button>
                   )}
                 </>
                 )}
-              </>
+              </div>
             )}
           </div>
 
           {/* Right Side - Tutors or Students */}
-          <div className="col-span-4 bg-white rounded-lg border border-zinc-200 p-4 overflow-y-auto h-full flex flex-col min-h-0">
+          <div className="col-span-4 bg-white rounded-lg border border-zinc-200 p-4 h-full flex flex-col min-h-0 overflow-hidden">
             <h2 className="text-lg font-semibold mb-3 flex-shrink-0">
               {userType === "student" ? "Current Tutors" : "Current Students"}
             </h2>
             {userType === "student" ? (
-              <div className="space-y-3 flex-1 overflow-y-auto">
+              <div className="space-y-3 flex-1 overflow-y-auto min-h-0">
                 {tutors.length === 0 ? (
                   <p className="text-sm text-zinc-500">No tutors yet</p>
                 ) : (
@@ -715,7 +1212,7 @@ export default function DashboardPage() {
                 )}
               </div>
             ) : (
-              <div className="space-y-3 flex-1 overflow-y-auto">
+              <div className="space-y-3 flex-1 overflow-y-auto min-h-0">
                 {students.length === 0 ? (
                   <p className="text-sm text-zinc-500">No students yet</p>
                 ) : (
@@ -774,6 +1271,29 @@ export default function DashboardPage() {
           }}
         />
       )}
+
+      {showAvailabilityModal && userType === "tutor" && user && (
+        <AvailabilityModal
+          date={selectedDate}
+          tutorId={user.id}
+          existingTimeSlots={
+            getAvailabilitiesForDate(selectedDate)[0]?.time_slots || []
+          }
+          onClose={() => setShowAvailabilityModal(false)}
+          onConfirm={handleCreateAvailability}
+        />
+      )}
+
+      <ConfirmModal
+        isOpen={confirmModal.isOpen}
+        title={confirmModal.title}
+        message={confirmModal.message}
+        confirmText={confirmModal.confirmText}
+        cancelText={confirmModal.cancelText}
+        variant={confirmModal.variant}
+        onConfirm={confirmModal.onConfirm}
+        onCancel={() => setConfirmModal({ ...confirmModal, isOpen: false })}
+      />
     </main>
   );
 }

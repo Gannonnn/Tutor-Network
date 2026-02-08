@@ -80,6 +80,16 @@ export default function StudentHome() {
   const coreRef = useRef(null);
 
   useEffect(() => {
+    // Prevent body scrolling
+    document.body.style.overflow = 'hidden';
+    
+    return () => {
+      // Restore body scrolling when component unmounts
+      document.body.style.overflow = 'unset';
+    };
+  }, []);
+
+  useEffect(() => {
     const init = async () => {
       setLoading(true);
       setError("");
@@ -112,12 +122,6 @@ export default function StudentHome() {
     init();
   }, [supabase]);
 
-  const scroll = (ref, direction) => {
-    if (ref.current) {
-      const scrollAmount = direction === "left" ? -300 : 300;
-      ref.current.scrollBy({ left: scrollAmount, behavior: "smooth" });
-    }
-  };
 
   const regenerate = async () => {
     if (!answers) return;
@@ -133,10 +137,10 @@ export default function StudentHome() {
 
 
   return (
-    <div className="min-h-screen bg-white">
+    <div className="fixed inset-0 bg-white overflow-hidden flex flex-col">
       <NavBar />
 
-      <main className="pt-14">
+      <main className="flex-1 pt-14 overflow-y-auto min-h-0">
         {loading ? (
           <div className="py-16 text-center text-zinc-600">Loading…</div>
         ) : !user ? (
@@ -147,7 +151,7 @@ export default function StudentHome() {
         ) : (
           <>
             {/* Recommended Subjects Carousel */}
-            <section className="pt-0 pb-4 px-6">
+            <section className="pt-6 pb-4 px-6">
               <div className="flex items-center justify-between mb-2">
                 <h2 className="text-2xl font-semibold text-zinc-900">Recommended Subjects</h2>
                 <div className="flex items-center gap-2">
@@ -166,50 +170,28 @@ export default function StudentHome() {
               ) : recommended.length === 0 ? (
                 <div className="rounded-lg border border-zinc-200 p-6 text-zinc-600">No recommendations yet. Try refreshing or updating your questionnaire.</div>
               ) : (
-                <div className="relative">
-                  <button
-                    onClick={() => scroll(recommendedRef, "left")}
-                    className="absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-white/90 hover:bg-white border border-zinc-200 rounded-full p-2 shadow-md transition-colors"
-                    aria-label="Scroll left"
-                  >
-                    <svg className="w-6 h-6 text-zinc-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                    </svg>
-                  </button>
-
-                  <div
-                    ref={recommendedRef}
-                    className="flex gap-4 overflow-x-auto scrollbar-hide scroll-smooth"
-                    style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-                  >
-                    {recommended.map((subject) => (
-                      <div
-                        key={subject.id}
-                        className="flex-shrink-0 w-64 h-48 rounded-xl border border-zinc-200 bg-white shadow-sm hover:shadow-md transition-shadow cursor-pointer overflow-hidden"
-                      >
-                        <div className="h-32 bg-zinc-100 flex items-center justify-center relative">
-                          <img
-                            src={subject.image}
-                            alt={subject.title}
-                            className="w-full h-full object-cover"
-                          />
-                        </div>
-                        <div className="p-4">
-                          <h3 className="text-lg font-medium text-zinc-900">{subject.title}</h3>
-                        </div>
+                <div
+                  ref={recommendedRef}
+                  className="flex gap-4 overflow-x-auto scroll-smooth pb-2"
+                  style={{ scrollbarWidth: "thin", scrollbarColor: "#d4d4d8 #f4f4f5" }}
+                >
+                  {recommended.map((subject) => (
+                    <div
+                      key={subject.id}
+                      className="flex-shrink-0 w-64 h-48 rounded-xl border border-zinc-200 bg-white shadow-sm hover:shadow-md transition-shadow cursor-pointer overflow-hidden"
+                    >
+                      <div className="h-32 bg-zinc-100 flex items-center justify-center relative">
+                        <img
+                          src={subject.image}
+                          alt={subject.title}
+                          className="w-full h-full object-cover"
+                        />
                       </div>
-                    ))}
-                  </div>
-
-                  <button
-                    onClick={() => scroll(recommendedRef, "right")}
-                    className="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-white/90 hover:bg-white border border-zinc-200 rounded-full p-2 shadow-md transition-colors"
-                    aria-label="Scroll right"
-                  >
-                    <svg className="w-6 h-6 text-zinc-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                    </svg>
-                  </button>
+                      <div className="p-4">
+                        <h3 className="text-lg font-medium text-zinc-900">{subject.title}</h3>
+                      </div>
+                    </div>
+                  ))}
                 </div>
               )}
             </section>
@@ -241,8 +223,7 @@ export default function StudentHome() {
                       {STRATEGY_DEFS['Practice Testing']}
                     </div>
                   )}
-                </span>,
-                <span className="relative inline-block align-middle ml-1 mr-1">
+                </span>,<span className="relative inline-block align-middle ml-1 mr-1">
                   <button
                     type="button"
                     onClick={() => setOpenStrategy(openStrategy === 'Spaced Repitition' ? null : 'Spaced Repitition')}
@@ -305,51 +286,29 @@ export default function StudentHome() {
               <h2 className="text-2xl font-semibold text-zinc-900 mb-4">
                 Core Subjects
               </h2>
-              <div className="relative">
-                <button
-                  onClick={() => scroll(coreRef, "left")}
-                  className="absolute left-0 top-1/2 -translate-y-1/2 z-10 bg-white/90 hover:bg-white border border-zinc-200 rounded-full p-2 shadow-md transition-colors"
-                  aria-label="Scroll left"
-                >
-                  <svg className="w-6 h-6 text-zinc-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-                  </svg>
-                </button>
-
-                <div
-                  ref={coreRef}
-                  className="flex gap-4 overflow-x-auto scrollbar-hide scroll-smooth"
-                  style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
-                >
-                  {CORE_SUBJECTS.map((subject) => (
-                    <Link
-                      key={subject.slug}
-                      href={`/subject/${subject.slug}`}
-                      className="flex-shrink-0 w-64 h-48 rounded-xl border border-zinc-200 bg-white shadow-sm hover:shadow-md transition-shadow cursor-pointer overflow-hidden block"
-                    >
-                      <div className="h-32 bg-zinc-100 flex items-center justify-center relative">
-                        <img
-                          src={imageFor(subject.title)}
-                          alt={subject.title}
-                          className="w-full h-full object-cover"
-                        />
-                      </div>
-                      <div className="p-4">
-                        <h3 className="text-lg font-medium text-zinc-900">{subject.title}</h3>
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-
-                <button
-                  onClick={() => scroll(coreRef, "right")}
-                  className="absolute right-0 top-1/2 -translate-y-1/2 z-10 bg-white/90 hover:bg-white border border-zinc-200 rounded-full p-2 shadow-md transition-colors"
-                  aria-label="Scroll right"
-                >
-                  <svg className="w-6 h-6 text-zinc-700" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                  </svg>
-                </button>
+              <div
+                ref={coreRef}
+                className="flex gap-4 overflow-x-auto scroll-smooth pb-2"
+                style={{ scrollbarWidth: "thin", scrollbarColor: "#d4d4d8 #f4f4f5" }}
+              >
+                {CORE_SUBJECTS.map((subject) => (
+                  <Link
+                    key={subject.slug}
+                    href={`/subject/${subject.slug}`}
+                    className="flex-shrink-0 w-64 h-48 rounded-xl border border-zinc-200 bg-white shadow-sm hover:shadow-md transition-shadow cursor-pointer overflow-hidden block"
+                  >
+                    <div className="h-32 bg-zinc-100 flex items-center justify-center relative">
+                      <img
+                        src={imageFor(subject.title)}
+                        alt={subject.title}
+                        className="w-full h-full object-cover"
+                      />
+                    </div>
+                    <div className="p-4">
+                      <h3 className="text-lg font-medium text-zinc-900">{subject.title}</h3>
+                    </div>
+                  </Link>
+                ))}
               </div>
             </section>
           </>

@@ -50,7 +50,34 @@ export default function BookingModal({
         setLoading(false);
         return;
       }
-      setAvailabilities(data || []);
+
+      // Get all confirmed bookings for this tutor to filter out booked slots
+      const { data: bookingsData } = await supabase
+        .from("bookings")
+        .select("date, time")
+        .eq("tutor_id", tutorId)
+        .eq("status", "confirmed");
+      
+      // Create a map of booked slots: key = "date:time", value = true
+      const bookedSlotsMap = new Map<string, boolean>();
+      (bookingsData || []).forEach((booking: any) => {
+        const key = `${booking.date}:${booking.time}`;
+        bookedSlotsMap.set(key, true);
+      });
+      
+      // Filter out booked slots from availabilities
+      const filteredAvailabilities = (data || []).map((avail: any) => {
+        const availableSlots = avail.time_slots.filter((slot: string) => {
+          const key = `${avail.date}:${slot}`;
+          return !bookedSlotsMap.has(key);
+        });
+        return {
+          ...avail,
+          time_slots: availableSlots,
+        };
+      }).filter((avail: any) => avail.time_slots.length > 0); // Only include availabilities with available slots
+      
+      setAvailabilities(filteredAvailabilities);
       setLoading(false);
     };
     load();
@@ -65,6 +92,84 @@ export default function BookingModal({
     if (!selectedDate || !selectedSlot || !selectedAvailability) return;
     setSubmitting(true);
     setError("");
+
+    // Check if the time slot is still available
+    if (!selectedAvailability.time_slots.includes(selectedSlot)) {
+      setError("This time slot is no longer available. Please select another time.");
+      setSubmitting(false);
+      // Reload availabilities
+      const { data, error: e } = await supabase
+        .from("availabilities")
+        .select("id, date, time_slots")
+        .eq("tutor_id", tutorId)
+        .gte("date", new Date().toISOString().split("T")[0])
+        .order("date", { ascending: true });
+      if (!e && data) {
+        const { data: bookingsData } = await supabase
+          .from("bookings")
+          .select("date, time")
+          .eq("tutor_id", tutorId)
+          .eq("status", "confirmed");
+        const bookedSlotsMap = new Map<string, boolean>();
+        (bookingsData || []).forEach((booking: any) => {
+          const key = `${booking.date}:${booking.time}`;
+          bookedSlotsMap.set(key, true);
+        });
+        const filteredAvailabilities = data.map((avail: any) => {
+          const availableSlots = avail.time_slots.filter((slot: string) => {
+            const key = `${avail.date}:${slot}`;
+            return !bookedSlotsMap.has(key);
+          });
+          return { ...avail, time_slots: availableSlots };
+        }).filter((avail: any) => avail.time_slots.length > 0);
+        setAvailabilities(filteredAvailabilities);
+      }
+      return;
+    }
+
+    // Check if a booking already exists for this tutor, date, and time
+    const { data: existingBooking } = await supabase
+      .from("bookings")
+      .select("id")
+      .eq("tutor_id", tutorId)
+      .eq("date", selectedDate)
+      .eq("time", selectedSlot)
+      .eq("status", "confirmed")
+      .maybeSingle();
+    
+    if (existingBooking) {
+      setError("This time slot is already booked. Please select another time.");
+      setSubmitting(false);
+      // Reload availabilities
+      const { data, error: e } = await supabase
+        .from("availabilities")
+        .select("id, date, time_slots")
+        .eq("tutor_id", tutorId)
+        .gte("date", new Date().toISOString().split("T")[0])
+        .order("date", { ascending: true });
+      if (!e && data) {
+        const { data: bookingsData } = await supabase
+          .from("bookings")
+          .select("date, time")
+          .eq("tutor_id", tutorId)
+          .eq("status", "confirmed");
+        const bookedSlotsMap = new Map<string, boolean>();
+        (bookingsData || []).forEach((booking: any) => {
+          const key = `${booking.date}:${booking.time}`;
+          bookedSlotsMap.set(key, true);
+        });
+        const filteredAvailabilities = data.map((avail: any) => {
+          const availableSlots = avail.time_slots.filter((slot: string) => {
+            const key = `${avail.date}:${slot}`;
+            return !bookedSlotsMap.has(key);
+          });
+          return { ...avail, time_slots: availableSlots };
+        }).filter((avail: any) => avail.time_slots.length > 0);
+        setAvailabilities(filteredAvailabilities);
+      }
+      return;
+    }
+
     const { error: insertError } = await supabase.from("bookings").insert({
       availability_id: selectedAvailability.id,
       tutor_id: tutorId,
@@ -130,16 +235,21 @@ export default function BookingModal({
                   className="w-full rounded-md border border-zinc-300 px-3 py-2 text-sm"
                 >
                   <option value="">Select date</option>
-                  {availabilities.map((a) => (
-                    <option key={a.id} value={a.date}>
-                      {new Date(a.date).toLocaleDateString("en-US", {
-                        weekday: "short",
-                        month: "short",
-                        day: "numeric",
-                        year: "numeric",
-                      })}
-                    </option>
-                  ))}
+                  {availabilities.map((a) => {
+                    // Parse YYYY-MM-DD format directly without timezone conversion
+                    const [year, month, day] = a.date.split("-").map(Number);
+                    const date = new Date(year, month - 1, day);
+                    return (
+                      <option key={a.id} value={a.date}>
+                        {date.toLocaleDateString("en-US", {
+                          weekday: "short",
+                          month: "short",
+                          day: "numeric",
+                          year: "numeric",
+                        })}
+                      </option>
+                    );
+                  })}
                 </select>
               </div>
               {selectedDate && slots.length > 0 && (
