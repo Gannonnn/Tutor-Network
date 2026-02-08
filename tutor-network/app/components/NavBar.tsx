@@ -80,6 +80,12 @@ export default function NavBar({ contextLabel }: { contextLabel?: string }) {
               My Dashboard
             </Link>
             <Link
+              href="/notes"
+              className="text-sm font-medium text-foreground hover:text-primary transition-colors"
+            >
+              My Notes
+            </Link>
+            <Link
               href="/profile"
               className="flex items-center justify-center w-9 h-9 rounded-full overflow-hidden bg-primary/20 text-primary border border-primary/30 hover:opacity-90 transition-opacity shrink-0"
               title="Profile"

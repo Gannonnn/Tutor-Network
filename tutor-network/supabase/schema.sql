@@ -63,6 +63,12 @@ create table if not exists public.bookings (
 alter table public.bookings add column if not exists subject_slug text;
 alter table public.bookings add column if not exists subtopic_title text;
 
+-- Session notes (live-edited during session; persisted for My Notes)
+alter table public.bookings add column if not exists notes text;
+alter table public.bookings add column if not exists notes_updated_at timestamptz;
+
+-- Live notes sync: app uses polling (no Realtime required). Replication can be enabled later if needed.
+
 -- -----------------------------------------------------------------------------
 -- 3b. Tutor subjects (which subjects/topics a tutor teaches)
 -- -----------------------------------------------------------------------------
