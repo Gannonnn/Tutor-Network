@@ -10,7 +10,7 @@ export async function createClient() {
       `Missing Supabase env vars. NEXT_PUBLIC_SUPABASE_URL=${supabaseUrl ? "set" : "MISSING"}, NEXT_PUBLIC_SUPABASE_ANON_KEY=${supabaseKey ? "set" : "MISSING"}. Add them in Vercel Settings > Environment Variables.`
     );
   }
-
+  //comment
   const cookieStore = await cookies();
 
   return createServerClient(

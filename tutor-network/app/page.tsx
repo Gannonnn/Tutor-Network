@@ -1,42 +1,57 @@
-import { redirect } from "next/navigation";
-import { createClient } from "@/lib/supabase/server";
+"use client";
 
-export const dynamic = "force-dynamic";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 
-export default async function Home() {
-  const supabase = await createClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+export default function Home() {
+  const router = useRouter();
+  const [checking, setChecking] = useState(true);
 
-  if (!user) {
-    // User is not logged in, redirect to login
-    redirect("/Routes");
+  useEffect(() => {
+    const supabase = createClient();
+    const checkAuth = async () => {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        router.replace("/Routes");
+        return;
+      }
+
+      // Check user type and redirect accordingly
+      const userType = user.user_metadata?.user_type;
+
+      if (!userType) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("user_type")
+          .eq("id", user.id)
+          .single();
+
+        if (profile?.user_type === "tutor") {
+          router.replace("/dashboard");
+        } else {
+          router.replace("/student-home");
+        }
+      } else if (userType === "tutor") {
+        router.replace("/dashboard");
+      } else {
+        router.replace("/student-home");
+      }
+    };
+
+    checkAuth().finally(() => setChecking(false));
+  }, [router]);
+
+  if (checking) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <p className="text-zinc-500">Redirecting…</p>
+      </div>
+    );
   }
 
-  // Check user type and redirect accordingly
-  const userType = user.user_metadata?.user_type;
-  
-  // If user_type is not in metadata, check profile
-  if (!userType) {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("user_type")
-      .eq("id", user.id)
-      .single();
-    
-    if (profile?.user_type === "tutor") {
-      // Tutors go to dashboard
-      redirect("/dashboard");
-    } else {
-      // Students go to student-home
-      redirect("/student-home");
-    }
-  } else if (userType === "tutor") {
-    // Tutors go to dashboard
-    redirect("/dashboard");
-  } else {
-    // Students go to student-home
-    redirect("/student-home");
-  }
+  return null;
 }
