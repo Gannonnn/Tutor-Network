@@ -2,8 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import type { AuthUser } from "@supabase/supabase-js";
+import BookingModal from "@/app/components/BookingModal";
 
 type Availability = {
   id: string;
@@ -37,6 +39,9 @@ type Event = {
   tutor_id?: string;
   student_id?: string;
   booking_id?: string;
+  subject_slug?: string | null;
+  subtopic_title?: string | null;
+  other_name?: string; // tutor name for student, student name for tutor
 };
 
 type Tutor = {
@@ -67,6 +72,7 @@ export default function DashboardPage() {
   const [students, setStudents] = useState<Student[]>([]);
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null);
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<string>("");
+  const [bookingModalTutor, setBookingModalTutor] = useState<Tutor | null>(null);
 
   const supabase = createClient();
 
@@ -77,80 +83,85 @@ export default function DashboardPage() {
       } = await supabase.auth.getUser();
       
       if (!u) {
-        router.replace("/Routes");
+        router.replace("/login");
         return;
       }
       
       setUser(u);
       const type = u.user_metadata?.user_type as "student" | "tutor" | undefined;
       setUserType(type || null);
-      setLoading(false);
       
-      // Load data based on user type
+      // Load data based on user type (pass u so we don't rely on state)
       if (type === "student") {
-        await loadTutors();
-        await loadStudentEvents();
-        await loadStudentAvailabilities();
+        await loadCurrentTutorsForStudent(supabase, u.id);
+        await loadStudentEvents(supabase, u.id);
       } else if (type === "tutor") {
-        await loadStudents();
-        await loadTutorEvents();
+        await loadCurrentStudentsForTutor(supabase, u.id);
+        await loadTutorEvents(supabase, u.id);
       }
+      setLoading(false);
     };
     
     loadUser();
   }, [router]);
 
-  const loadTutors = async () => {
-    if (!user) return;
-    
-    // Load tutors (users with user_type = 'tutor')
-    // Note: This assumes you have a profiles table with user_type column
-    // If not, you may need to query auth.users differently or create a profiles table
-    const { data: tutorsData, error } = await supabase
-      .from("profiles")
-      .select("id, full_name, avatar_url, email, contact_info")
-      .eq("user_type", "tutor");
-    
-    if (error) {
-      console.error("Error loading tutors:", error);
-      // Fallback to placeholder if table doesn't exist yet
-      setTutors([
-        { id: "1", full_name: "John Tutor", email: "john@example.com", contact_info: "555-0101" },
-        { id: "2", full_name: "Jane Tutor", email: "jane@example.com", contact_info: "555-0102" },
-      ]);
+  const loadCurrentTutorsForStudent = async (
+    supabaseClient: ReturnType<typeof createClient>,
+    studentId: string
+  ) => {
+    const { data: bookings } = await supabaseClient
+      .from("bookings")
+      .select("tutor_id")
+      .eq("student_id", studentId)
+      .eq("status", "confirmed");
+    const tutorIds = [...new Set((bookings || []).map((b: { tutor_id: string }) => b.tutor_id))];
+    if (tutorIds.length === 0) {
+      setTutors([]);
       return;
     }
-    
+    const { data: tutorsData, error } = await supabaseClient
+      .from("profiles")
+      .select("id, full_name, avatar_url, email, contact_info")
+      .in("id", tutorIds);
+    if (error) {
+      console.error("Error loading tutors:", error);
+      setTutors([]);
+      return;
+    }
     setTutors(tutorsData || []);
   };
 
-  const loadStudents = async () => {
-    if (!user) return;
-    
-    // Load students (users with user_type = 'student')
-    const { data: studentsData, error } = await supabase
-      .from("profiles")
-      .select("id, full_name, avatar_url, email, contact_info")
-      .eq("user_type", "student");
-    
-    if (error) {
-      console.error("Error loading students:", error);
-      // Fallback to placeholder if table doesn't exist yet
-      setStudents([
-        { id: "1", full_name: "Alice Student", email: "alice@example.com", contact_info: "555-0201" },
-        { id: "2", full_name: "Bob Student", email: "bob@example.com", contact_info: "555-0202" },
-      ]);
+  const loadCurrentStudentsForTutor = async (
+    supabaseClient: ReturnType<typeof createClient>,
+    tutorId: string
+  ) => {
+    const { data: bookings } = await supabaseClient
+      .from("bookings")
+      .select("student_id")
+      .eq("tutor_id", tutorId)
+      .eq("status", "confirmed");
+    const studentIds = [...new Set((bookings || []).map((b: { student_id: string }) => b.student_id))];
+    if (studentIds.length === 0) {
+      setStudents([]);
       return;
     }
-    
+    const { data: studentsData, error } = await supabaseClient
+      .from("profiles")
+      .select("id, full_name, avatar_url, email, contact_info")
+      .in("id", studentIds);
+    if (error) {
+      console.error("Error loading students:", error);
+      setStudents([]);
+      return;
+    }
     setStudents(studentsData || []);
   };
 
-  const loadStudentEvents = async () => {
-    if (!user) return;
-    
-    // Load bookings for the student
-    const { data: bookings, error } = await supabase
+  const loadStudentEvents = async (
+    supabaseClient: ReturnType<typeof createClient>,
+    studentId: string
+  ) => {
+    const { data: bookings, error } = await supabaseClient
       .from("bookings")
       .select(`
         id,
@@ -158,9 +169,11 @@ export default function DashboardPage() {
         time,
         tutor_id,
         status,
+        subject_slug,
+        subtopic_title,
         tutor:profiles!bookings_tutor_id_fkey(full_name)
       `)
-      .eq("student_id", user.id)
+      .eq("student_id", studentId)
       .eq("status", "confirmed")
       .order("date", { ascending: true })
       .order("time", { ascending: true });
@@ -177,16 +190,19 @@ export default function DashboardPage() {
       time: booking.time,
       tutor_id: booking.tutor_id,
       booking_id: booking.id,
+      subject_slug: booking.subject_slug ?? null,
+      subtopic_title: booking.subtopic_title ?? null,
+      other_name: booking.tutor?.full_name ?? undefined,
     }));
     
     setEvents(formattedEvents);
   };
 
-  const loadTutorEvents = async () => {
-    if (!user) return;
-    
-    // Load bookings for the tutor
-    const { data: bookings, error } = await supabase
+  const loadTutorEvents = async (
+    supabaseClient: ReturnType<typeof createClient>,
+    tutorId: string
+  ) => {
+    const { data: bookings, error } = await supabaseClient
       .from("bookings")
       .select(`
         id,
@@ -194,9 +210,11 @@ export default function DashboardPage() {
         time,
         student_id,
         status,
+        subject_slug,
+        subtopic_title,
         student:profiles!bookings_student_id_fkey(full_name)
       `)
-      .eq("tutor_id", user.id)
+      .eq("tutor_id", tutorId)
       .eq("status", "confirmed")
       .order("date", { ascending: true })
       .order("time", { ascending: true });
@@ -213,15 +231,18 @@ export default function DashboardPage() {
       time: booking.time,
       student_id: booking.student_id,
       booking_id: booking.id,
+      subject_slug: booking.subject_slug ?? null,
+      subtopic_title: booking.subtopic_title ?? null,
+      other_name: booking.student?.full_name ?? undefined,
     }));
     
     setEvents(formattedEvents);
     
     // Also load availabilities for the tutor
-    const { data: availabilitiesData, error: availError } = await supabase
+    const { data: availabilitiesData, error: availError } = await supabaseClient
       .from("availabilities")
       .select("*")
-      .eq("tutor_id", user.id)
+      .eq("tutor_id", tutorId)
       .gte("date", new Date().toISOString().split("T")[0])
       .order("date", { ascending: true });
     
@@ -277,7 +298,7 @@ export default function DashboardPage() {
     }
     
     // Reload availabilities and events
-    await loadTutorEvents();
+    if (user) await loadTutorEvents(supabase, user.id);
     alert(`Availability created for ${selectedDate.toLocaleDateString()}`);
   };
 
@@ -306,6 +327,8 @@ export default function DashboardPage() {
         date: availability.date,
         time: timeSlot,
         status: "confirmed",
+        subject_slug: null,
+        subtopic_title: null,
       })
       .select()
       .single();
@@ -342,16 +365,18 @@ export default function DashboardPage() {
     }
     
     // Reload events for both student and tutor
-    await loadStudentEvents();
-    await loadStudentAvailabilities();
+    if (user) {
+      await loadStudentEvents(supabase, user.id);
+      await loadStudentAvailabilities(supabase, user.id);
+    }
     alert(`Booking confirmed for ${availability.date} at ${timeSlot}`);
   };
 
-  const loadStudentAvailabilities = async () => {
-    if (!user || userType !== "student") return;
-    
-    // Load all availabilities from tutors (for students to see and book)
-    const { data: availabilitiesData, error } = await supabase
+  const loadStudentAvailabilities = async (
+    supabaseClient: ReturnType<typeof createClient>,
+    _studentId: string
+  ) => {
+    const { data: availabilitiesData, error } = await supabaseClient
       .from("availabilities")
       .select(`
         id,
@@ -493,7 +518,7 @@ export default function DashboardPage() {
               <div className="grid grid-cols-7 gap-0.5 flex-1">
                 {days.map((day, idx) => {
                   const dayEvents = day ? getEventsForDate(day) : [];
-                  const dayAvailabilities = day ? getAvailabilitiesForDate(day) : [];
+                  const dayAvailabilities = userType === "tutor" && day ? getAvailabilitiesForDate(day) : [];
                   const isSelected =
                     day &&
                     day.toDateString() === selectedDate.toDateString();
@@ -551,105 +576,87 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          {/* Middle - Event Info / Availabilities */}
+          {/* Middle - Event info (selected event) or prompt + Available Sessions */}
           <div className="col-span-4 bg-white rounded-lg border border-zinc-200 p-4 overflow-y-auto h-full flex flex-col min-h-0">
-            <h2 className="text-lg font-semibold mb-3 flex-shrink-0">
-              {userType === "student" ? "Available Sessions" : "Event Details"}
-            </h2>
-            
-            {userType === "student" ? (
-              // Student view: Show availabilities they can book
-              <div className="flex-1 overflow-y-auto">
-                {selectedDateEvents.length > 0 && (
-                  <div className="mb-4">
-                    <h3 className="text-sm font-semibold mb-2">Your Bookings</h3>
-                    <div className="space-y-2">
+            <h2 className="text-lg font-semibold mb-3 flex-shrink-0">Event info</h2>
+
+            {selectedEvent ? (
+              <>
+                <div className="p-3 border border-zinc-200 rounded-lg space-y-2 flex-1">
+                  <p className="text-sm font-medium">{selectedEvent.title}</p>
+                  <p className="text-xs text-zinc-600">
+                    With: {selectedEvent.other_name ?? (userType === "student" ? "Tutor" : "Student")}
+                  </p>
+                  <p className="text-xs text-zinc-600">
+                    When: {new Date(selectedEvent.date).toLocaleDateString()} at {selectedEvent.time}
+                  </p>
+                  {(selectedEvent.subtopic_title || selectedEvent.subject_slug) && (
+                    <p className="text-xs text-zinc-600">
+                      Topic: {selectedEvent.subtopic_title ?? selectedEvent.subject_slug ?? "—"}
+                    </p>
+                  )}
+                  <Link
+                    href={`/session/${selectedEvent.booking_id ?? selectedEvent.id}`}
+                    className="inline-flex items-center gap-2 mt-3 px-3 py-2 rounded-lg bg-primary text-white text-sm font-medium hover:opacity-90"
+                  >
+                    Join session
+                  </Link>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setSelectedEvent(null)}
+                  className="mt-2 text-sm text-zinc-500 hover:underline"
+                >
+                  Back to calendar
+                </button>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-zinc-600 mb-3">
+                  {userType === "student"
+                    ? "Select an event from Upcoming Events (left) to see details and join the session. Book new sessions from a subject page or via Schedule new times with a current tutor."
+                    : "Select an event from Upcoming Events (left) to see details and join, or use the calendar to create availability."}
+                </p>
+                {userType === "student" ? null : (
+                <>
+                  {selectedDateEvents.length === 0 ? (
+                    <div className="text-center py-6 flex-1 flex flex-col justify-center">
+                      <p className="text-sm text-zinc-500 mb-4">
+                        No events scheduled for this day
+                      </p>
+                      <button
+                        onClick={handleCreateAvailability}
+                        className="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 transition-colors text-sm"
+                      >
+                        Create Availability
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="space-y-3 flex-1 overflow-y-auto">
                       {selectedDateEvents.map((event) => (
                         <div
                           key={event.id}
-                          className="p-2 border border-zinc-200 rounded-lg"
+                          onClick={() => setSelectedEvent(event)}
+                          className="p-3 border border-zinc-200 rounded-lg cursor-pointer hover:bg-zinc-50"
                         >
-                          <p className="text-xs font-medium">{event.title}</p>
-                          <p className="text-[10px] text-zinc-600">Time: {event.time}</p>
+                          <h3 className="font-semibold mb-1 text-sm">{event.title}</h3>
+                          <p className="text-xs text-zinc-600">
+                            Date: {new Date(event.date).toLocaleDateString()}
+                          </p>
+                          <p className="text-xs text-zinc-600">Time: {event.time}</p>
                         </div>
                       ))}
-                    </div>
-                  </div>
-                )}
-                
-                {selectedDateAvailabilities.length === 0 ? (
-                  <div className="text-center py-6">
-                    <p className="text-sm text-zinc-500">
-                      No available sessions for this day
-                    </p>
-                  </div>
-                ) : (
-                  <div className="space-y-3">
-                    <h3 className="text-sm font-semibold">Available Time Slots</h3>
-                    {selectedDateAvailabilities.map((availability: any) => (
-                      <div
-                        key={availability.id}
-                        className="p-3 border border-zinc-200 rounded-lg"
+                      <button
+                        onClick={handleCreateAvailability}
+                        className="w-full px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 transition-colors mt-3 text-sm"
                       >
-                        <p className="text-xs font-medium mb-2">
-                          {availability.tutor?.full_name || "Tutor"}
-                        </p>
-                        <div className="grid grid-cols-2 gap-2">
-                          {availability.time_slots.map((slot: string) => (
-                            <button
-                              key={slot}
-                              onClick={() => handleAcceptAvailability(availability.id, slot)}
-                              className="px-3 py-1.5 text-xs bg-green-50 text-green-700 border border-green-200 rounded hover:bg-green-100 transition-colors"
-                            >
-                              {slot}
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ) : (
-              // Tutor view: Show events and allow creating availability
-              selectedDateEvents.length === 0 ? (
-                <div className="text-center py-6 flex-1 flex flex-col justify-center">
-                  <p className="text-sm text-zinc-500 mb-4">
-                    No events scheduled for this day
-                  </p>
-                  {userType === "tutor" && (
-                    <button
-                      onClick={handleCreateAvailability}
-                      className="px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 transition-colors text-sm"
-                    >
-                      Create Availability
-                    </button>
-                  )}
-                </div>
-              ) : (
-                <div className="space-y-3 flex-1 overflow-y-auto">
-                  {selectedDateEvents.map((event) => (
-                    <div
-                      key={event.id}
-                      className="p-3 border border-zinc-200 rounded-lg"
-                    >
-                      <h3 className="font-semibold mb-1 text-sm">{event.title}</h3>
-                      <p className="text-xs text-zinc-600">
-                        Date: {new Date(event.date).toLocaleDateString()}
-                      </p>
-                      <p className="text-xs text-zinc-600">Time: {event.time}</p>
+                        Create Availability
+                      </button>
                     </div>
-                  ))}
-                  {userType === "tutor" && (
-                    <button
-                      onClick={handleCreateAvailability}
-                      className="w-full px-4 py-2 bg-green-700 text-white rounded-lg hover:bg-green-800 transition-colors mt-3 text-sm"
-                    >
-                      Create Availability
-                    </button>
                   )}
-                </div>
-              )
+                </>
+                )}
+              </>
             )}
           </div>
 
@@ -692,6 +699,15 @@ export default function DashboardPage() {
                         )}
                         {tutor.contact_info && (
                           <p className="text-xs text-zinc-600">{tutor.contact_info}</p>
+                        )}
+                        {user && (
+                          <button
+                            type="button"
+                            onClick={() => setBookingModalTutor(tutor)}
+                            className="mt-2 text-xs text-primary hover:underline font-medium"
+                          >
+                            Schedule new times
+                          </button>
                         )}
                       </div>
                     </div>
@@ -742,6 +758,22 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+
+      {bookingModalTutor && user && (
+        <BookingModal
+          tutorId={bookingModalTutor.id}
+          tutorName={bookingModalTutor.full_name}
+          studentId={user.id}
+          subjectSlug={null}
+          subtopicTitle={null}
+          onClose={() => setBookingModalTutor(null)}
+          onSuccess={async () => {
+            setBookingModalTutor(null);
+            await loadCurrentTutorsForStudent(supabase, user.id);
+            await loadStudentEvents(supabase, user.id);
+          }}
+        />
+      )}
     </main>
   );
 }

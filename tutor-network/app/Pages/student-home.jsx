@@ -1,9 +1,10 @@
 "use client";
 
 import { useRef } from "react";
+import Link from "next/link";
 import NavBar from "../components/NavBar";
 
-// Placeholder subject data
+// Placeholder subject data (recommended: no links for now)
 const recommendedSubjects = [
   { id: 1, title: "Geometry", image: "/images/geometry.jpg" },
   { id: 2, title: "Calculus", image: "/images/calculus.jpg" },
@@ -13,12 +14,12 @@ const recommendedSubjects = [
 ];
 
 const coreSubjects = [
-  { id: 1, title: "Math", image: "/images/math.jpg" },
-  { id: 2, title: "Science", image: "/images/science.jpg" },
-  { id: 3, title: "English", image: "/images/english.jpg" },
-  { id: 4, title: "History", image: "/images/history.jpg" },
-  { id: 5, title: "Foreign Languages", image: "/images/languages.jpg" },
-  { id: 6, title: "Arts", image: "/images/arts.jpg" },
+  { id: 1, title: "Math", slug: "math", image: "/images/math.jpg" },
+  { id: 2, title: "Science", slug: "science", image: "/images/science.jpg" },
+  { id: 3, title: "English", slug: "english", image: "/images/english.jpg" },
+  { id: 4, title: "History", slug: "history", image: "/images/history.jpg" },
+  { id: 5, title: "Foreign Languages", slug: "foreign-languages", image: "/images/languages.jpg" },
+  { id: 6, title: "Arts", slug: "arts", image: "/images/arts.jpg" },
 ];
 
 export default function StudentHome() {
@@ -111,8 +112,9 @@ export default function StudentHome() {
               style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
             >
               {coreSubjects.map((subject) => (
-                <div
+                <Link
                   key={subject.id}
+                  href={`/subject/${subject.slug}`}
                   className="flex-shrink-0 w-64 h-48 rounded-xl border border-zinc-200 bg-white shadow-sm hover:shadow-md transition-shadow cursor-pointer overflow-hidden"
                 >
                   <div className="h-32 bg-zinc-100 flex items-center justify-center relative">
@@ -125,7 +127,7 @@ export default function StudentHome() {
                   <div className="p-4">
                     <h3 className="text-lg font-medium text-zinc-900">{subject.title}</h3>
                   </div>
-                </div>
+                </Link>
               ))}
             </div>
 

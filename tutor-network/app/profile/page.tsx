@@ -1,9 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import {
+  getAllSubtopicsFlat,
+  filterSubtopicsBySearch,
+  type SubtopicOption,
+} from "@/lib/subjects";
 import type { AuthUser } from "@supabase/supabase-js";
 
 type ProfileRow = {
@@ -13,7 +18,10 @@ type ProfileRow = {
   username?: string | null;
   bio?: string | null;
   avatar_url?: string | null;
+  user_type?: string | null;
 } | null;
+
+type TutorSubjectRow = { subject_slug: string; subtopic_id: string };
 
 export default function ProfilePage() {
   const router = useRouter();
@@ -27,9 +35,27 @@ export default function ProfilePage() {
     username: "",
     bio: "",
     avatar_url: "",
+    user_type: "" as "" | "student" | "tutor",
   });
+  const [selectedSubtopics, setSelectedSubtopics] = useState<TutorSubjectRow[]>(
+    []
+  );
+  const [subjectSearch, setSubjectSearch] = useState("");
 
   const supabase = createClient();
+  const allSubtopics = useMemo(() => getAllSubtopicsFlat(), []);
+  const filteredSubtopics = useMemo(
+    () => filterSubtopicsBySearch(allSubtopics, subjectSearch),
+    [allSubtopics, subjectSearch]
+  );
+  const selectedAsOptions = useMemo(() => {
+    const set = new Set(
+      selectedSubtopics.map((s) => `${s.subject_slug}:${s.subtopic_id}`)
+    );
+    return allSubtopics.filter((o) =>
+      set.has(`${o.subject_slug}:${o.subtopic_id}`)
+    );
+  }, [allSubtopics, selectedSubtopics]);
 
   useEffect(() => {
     const loadUserAndProfile = async () => {
@@ -48,7 +74,7 @@ export default function ProfilePage() {
 
       const { data: p } = await supabase
         .from("profiles")
-        .select("id, email, full_name, username, bio, avatar_url")
+        .select("id, email, full_name, username, bio, avatar_url, user_type")
         .eq("id", u.id)
         .single();
 
@@ -59,11 +85,20 @@ export default function ProfilePage() {
           username: p.username ?? "",
           bio: p.bio ?? "",
           avatar_url: p.avatar_url ?? "",
+          user_type: (p.user_type as "" | "student" | "tutor") ?? "",
         });
+        if (p.user_type === "tutor") {
+          const { data: ts } = await supabase
+            .from("tutor_subjects")
+            .select("subject_slug, subtopic_id")
+            .eq("tutor_id", u.id);
+          setSelectedSubtopics(ts ?? []);
+        }
       } else {
         setForm((prev) => ({
           ...prev,
           full_name: prev.full_name || (u.user_metadata?.full_name ?? ""),
+          user_type: prev.user_type || "",
         }));
       }
       setLoading(false);
@@ -86,17 +121,66 @@ export default function ProfilePage() {
           username: form.username || null,
           bio: form.bio || null,
           avatar_url: form.avatar_url || null,
+          user_type: form.user_type || null,
           updated_at: new Date().toISOString(),
         },
         { onConflict: "id" }
       );
-    setSaving(false);
     if (error) {
+      setSaving(false);
       setMessage(error.message);
       return;
     }
+    if (form.user_type === "tutor") {
+      const { error: delErr } = await supabase
+        .from("tutor_subjects")
+        .delete()
+        .eq("tutor_id", user.id);
+      if (delErr) {
+        setSaving(false);
+        setMessage(delErr.message);
+        return;
+      }
+      if (selectedSubtopics.length > 0) {
+        const { error: insErr } = await supabase.from("tutor_subjects").insert(
+          selectedSubtopics.map((s) => ({
+            tutor_id: user.id,
+            subject_slug: s.subject_slug,
+            subtopic_id: s.subtopic_id,
+          }))
+        );
+        if (insErr) {
+          setSaving(false);
+          setMessage(insErr.message);
+          return;
+        }
+      }
+    }
+    setSaving(false);
     setMessage("Profile saved.");
     router.refresh();
+  };
+
+  const addSubtopic = (opt: SubtopicOption) => {
+    const key = `${opt.subject_slug}:${opt.subtopic_id}`;
+    if (
+      selectedSubtopics.some(
+        (s) => `${s.subject_slug}:${s.subtopic_id}` === key
+      )
+    )
+      return;
+    setSelectedSubtopics((prev) => [
+      ...prev,
+      { subject_slug: opt.subject_slug, subtopic_id: opt.subtopic_id },
+    ]);
+  };
+
+  const removeSubtopic = (subject_slug: string, subtopic_id: string) => {
+    setSelectedSubtopics((prev) =>
+      prev.filter(
+        (s) => !(s.subject_slug === subject_slug && s.subtopic_id === subtopic_id)
+      )
+    );
   };
 
   const handleLogout = async () => {
@@ -160,6 +244,40 @@ export default function ProfilePage() {
           </div>
 
           <div>
+            <label className="mb-1 block text-sm font-medium text-zinc-700">
+              I am a
+            </label>
+            <div className="flex gap-4">
+              <label className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="user_type"
+                  value="student"
+                  checked={form.user_type === "student"}
+                  onChange={() =>
+                    setForm((prev) => ({ ...prev, user_type: "student" }))
+                  }
+                  className="text-primary focus:ring-primary"
+                />
+                <span className="text-sm">Student</span>
+              </label>
+              <label className="flex items-center gap-2">
+                <input
+                  type="radio"
+                  name="user_type"
+                  value="tutor"
+                  checked={form.user_type === "tutor"}
+                  onChange={() =>
+                    setForm((prev) => ({ ...prev, user_type: "tutor" }))
+                  }
+                  className="text-primary focus:ring-primary"
+                />
+                <span className="text-sm">Tutor</span>
+              </label>
+            </div>
+          </div>
+
+          <div>
             <label
               htmlFor="username"
               className="mb-1 block text-sm font-medium text-zinc-700"
@@ -215,6 +333,82 @@ export default function ProfilePage() {
               placeholder="https://..."
             />
           </div>
+
+          {form.user_type === "tutor" && (
+            <div>
+              <label className="mb-1 block text-sm font-medium text-zinc-700">
+                Subjects I teach
+              </label>
+              <p className="mb-2 text-xs text-zinc-500">
+                Search and add the subjects/topics you teach. Students will see
+                you on subject pages when they match.
+              </p>
+              <input
+                type="search"
+                value={subjectSearch}
+                onChange={(e) => setSubjectSearch(e.target.value)}
+                placeholder="Search subjects or topics..."
+                className="mb-2 w-full rounded-lg border border-zinc-300 bg-white px-3 py-2 text-foreground placeholder-zinc-400 focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                aria-label="Search subjects"
+              />
+              <div className="mb-2 max-h-40 overflow-y-auto rounded-lg border border-zinc-200 bg-zinc-50 p-2">
+                {filteredSubtopics.length === 0 ? (
+                  <p className="text-sm text-zinc-500">
+                    {subjectSearch ? "No matches." : "No subtopics."}
+                  </p>
+                ) : (
+                  <ul className="space-y-1">
+                    {filteredSubtopics.map((opt) => {
+                      const key = `${opt.subject_slug}:${opt.subtopic_id}`;
+                      const selected = selectedSubtopics.some(
+                        (s) =>
+                          s.subject_slug === opt.subject_slug &&
+                          s.subtopic_id === opt.subtopic_id
+                      );
+                      return (
+                        <li key={key}>
+                          <button
+                            type="button"
+                            onClick={() => addSubtopic(opt)}
+                            disabled={selected}
+                            className={`w-full rounded px-2 py-1.5 text-left text-sm ${
+                              selected
+                                ? "cursor-default bg-zinc-200 text-zinc-500"
+                                : "hover:bg-primary/10 text-foreground"
+                            }`}
+                          >
+                            {opt.subject_title} → {opt.subtopic_title}
+                          </button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+              {selectedAsOptions.length > 0 && (
+                <div className="flex flex-wrap gap-2">
+                  {selectedAsOptions.map((opt) => (
+                    <span
+                      key={`${opt.subject_slug}:${opt.subtopic_id}`}
+                      className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-2.5 py-1 text-sm text-foreground"
+                    >
+                      {opt.subject_title} → {opt.subtopic_title}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          removeSubtopic(opt.subject_slug, opt.subtopic_id)
+                        }
+                        className="rounded-full p-0.5 hover:bg-primary/30"
+                        aria-label={`Remove ${opt.subtopic_title}`}
+                      >
+                        ×
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
 
           {message && (
             <p
