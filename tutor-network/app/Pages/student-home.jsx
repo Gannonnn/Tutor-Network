@@ -8,20 +8,50 @@ import { SUBJECTS } from "@/lib/subjects";
 
 const CORE_SUBJECTS = Object.values(SUBJECTS);
 
-// Placeholder images for cards
+// Placeholder images for cards — drop matching files into public/images/
 const imageFor = (title) => {
   const key = title.toLowerCase();
+  // Math
+  if (key.includes("elementary")) return "/images/elementary-math.jpg";
+  if (key.includes("middle school")) return "/images/middle-school-math.jpg";
   if (key.includes("geometry")) return "/images/geometry.jpg";
   if (key.includes("calculus")) return "/images/calculus.jpg";
+  if (key.includes("trigonometry")) return "/images/trigonometry.jpg";
+  if (key.includes("algebra")) return "/images/algebra.jpg";
+  // Science
   if (key.includes("physics")) return "/images/physics.jpg";
   if (key.includes("chem")) return "/images/chemistry.jpg";
   if (key.includes("bio")) return "/images/biology.jpg";
+  if (key.includes("computer")) return "/images/computer-science.jpg";
+  if (key.includes("geography")) return "/images/geography.jpg";
+  // English
+  if (key.includes("grammar")) return "/images/grammar.jpg";
+  if (key.includes("creative")) return "/images/creative-writing.jpg";
+  if (key.includes("essay")) return "/images/essay-writing.jpg";
+  if (key.includes("literature")) return "/images/literature.jpg";
+  // History
+  if (key.includes("government")) return "/images/government.jpg";
+  if (key.includes("economics")) return "/images/economics.jpg";
+  if (key.includes("history")) return "/images/history.jpg";
+  // Foreign Languages
+  if (key.includes("spanish")) return "/images/world-languages.jpg";
+  if (key.includes("french")) return "/images/world-languages.jpg";
+  if (key.includes("german")) return "/images/world-languages.jpg";
+  if (key.includes("japanese")) return "/images/world-languages.jpg";
+  if (key.includes("chinese")) return "/images/world-languages.jpg";
+  // Arts
+  if (key.includes("ceramics")) return "/images/ceramics.jpg";
+  if (key.includes("choir")) return "/images/choir.jpg";
+  if (key.includes("band")) return "/images/band.jpg";
+  if (key.includes("orchestra")) return "/images/orchestra.jpg";
+  if (key.includes("visual")) return "/images/visual-arts.jpg";
+  // Fallback category images
   if (key.includes("science")) return "/images/science.jpg";
   if (key.includes("english")) return "/images/english.jpg";
-  if (key.includes("history")) return "/images/history.jpg";
   if (key.includes("language")) return "/images/languages.jpg";
   if (key.includes("math")) return "/images/math.jpg";
-  if (key.includes("arts")) return "/images/arts.jpg"
+  if (key.includes("arts")) return "/images/arts.jpg";
+  return "/images/arts.jpg";
 };
 
 function generateRecommendations(answers) {

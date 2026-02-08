@@ -18,6 +18,8 @@ export const SUBJECTS: Record<string, SubjectConfig> = {
     title: "Math",
     slug: "math",
     subtopics: [
+      { id: "elementary", title: "Elementary Math", description: "Basic arithmetic, number sense, simple fractions, and fundamental problem-solving skills for grades K-5." },
+      { id: "middle-school", title: "Middle School Math", description: "Pre-algebra concepts, ratios, proportions, introductory equations, and mathematical reasoning for grades 6-8." },
       { id: "algebra", title: "Algebra", description: "Understand variables, equations, inequalities, functions, and how to reason symbolically." },
       { id: "geometry", title: "Geometry", description: "Explore shapes, theorems, proofs, and spatial reasoning including Euclidean geometry." },
       { id: "trigonometry", title: "Trigonometry", description: "Study angles, triangles, and trigonometric functions with applications to waves and rotations." },
@@ -31,13 +33,17 @@ export const SUBJECTS: Record<string, SubjectConfig> = {
       { id: "physics", title: "Physics", description: "Motion, forces, energy, and the fundamental laws governing the physical world." },
       { id: "chemistry", title: "Chemistry", description: "Atoms, molecules, reactions, and the structure and behavior of matter." },
       { id: "biology", title: "Biology", description: "Living organisms, cells, genetics, evolution, and ecosystems." },
+      { id: "computer-science", title: "Computer Science", description: "Programming, algorithms, data structures, and computational thinking to solve problems with technology." },
+      { id: "geography", title: "Geography", description: "Physical and human geography, maps, spatial patterns, and understanding Earth's landscapes and cultures." },
     ],
   },
   english: {
     title: "English",
     slug: "english",
     subtopics: [
-      { id: "grammar", title: "Grammar & Writing", description: "Sentence structure, punctuation, essay writing, and clear communication." },
+      { id: "grammar", title: "Grammar", description: "Sentence structure, parts of speech, punctuation, and the rules governing clear written communication." },
+      { id: "creative-writing", title: "Creative Writing", description: "Storytelling, narrative techniques, character development, and expressing ideas through fiction and poetry." },
+      { id: "essay-writing", title: "Essay Writing", description: "Academic writing, thesis development, argumentation, research skills, and crafting persuasive essays." },
       { id: "literature", title: "Literature", description: "Reading comprehension, analysis of fiction and non-fiction, and critical thinking." },
     ],
   },
@@ -47,6 +53,8 @@ export const SUBJECTS: Record<string, SubjectConfig> = {
     subtopics: [
       { id: "us-history", title: "U.S. History", description: "American history from colonization through the present day." },
       { id: "world-history", title: "World History", description: "Major civilizations, events, and global developments over time." },
+      { id: "government", title: "Government", description: "Political systems, civic participation, constitutional principles, and how governments function and impact society." },
+      { id: "economics", title: "Economics", description: "Micro and macroeconomics, markets, supply and demand, financial literacy, and economic decision-making." },
     ],
   },
   "foreign-languages": {
@@ -55,6 +63,9 @@ export const SUBJECTS: Record<string, SubjectConfig> = {
     subtopics: [
       { id: "spanish", title: "Spanish", description: "Spanish language fundamentals, conversation, and culture." },
       { id: "french", title: "French", description: "French language fundamentals, conversation, and culture." },
+      { id: "german", title: "German", description: "German language fundamentals, vocabulary, grammar, and cultural insights into German-speaking countries." },
+      { id: "japanese", title: "Japanese", description: "Japanese language basics including hiragana, katakana, kanji, grammar, and understanding Japanese culture." },
+      { id: "chinese", title: "Chinese (Mandarin)", description: "Mandarin Chinese language fundamentals, characters, tones, grammar, and cultural context." },
     ],
   },
   arts: {
@@ -62,7 +73,10 @@ export const SUBJECTS: Record<string, SubjectConfig> = {
     slug: "arts",
     subtopics: [
       { id: "visual", title: "Visual Arts", description: "Drawing, painting, composition, and art history." },
-      { id: "music", title: "Music", description: "Music theory, performance, and appreciation." },
+      { id: "ceramics", title: "Ceramics", description: "Pottery, sculpture, hand-building techniques, glazing, and working with clay as an artistic medium." },
+      { id: "choir", title: "Choir", description: "Vocal music performance, sight-singing, harmony, and choral techniques for ensemble singing." },
+      { id: "band", title: "Band", description: "Instrumental music performance with wind and percussion instruments, music reading, and ensemble coordination." },
+      { id: "orchestra", title: "Orchestra", description: "String and orchestral instrument performance, classical repertoire, and symphonic ensemble skills." },
     ],
   },
 };
