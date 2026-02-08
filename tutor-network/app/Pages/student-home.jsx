@@ -38,7 +38,7 @@ export default function StudentHome() {
 
       <main className="pt-14">
         {/* Recommended Subjects Carousel */}
-        <section className="py-8 px-6">
+        <section className="pt-0 pb-8 px-6">
           <h2 className="text-2xl font-semibold text-zinc-900 mb-6">
             Recommended Subjects
           </h2>

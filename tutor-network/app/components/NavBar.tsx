@@ -7,7 +7,7 @@ import type { AuthUser } from "@supabase/supabase-js";
 
 type ProfileRow = { avatar_url: string | null; full_name: string | null } | null;
 
-export default function NavBar() {
+export default function NavBar({ contextLabel }: { contextLabel?: string }) {
   const [user, setUser] = useState<AuthUser | null>(null);
   const [profile, setProfile] = useState<ProfileRow>(null);
 
@@ -56,12 +56,19 @@ export default function NavBar() {
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 h-14 bg-background border-b border-zinc-200 px-6 flex items-center justify-between">
-      <Link
-        href="/"
-        className="text-xl font-medium text-foreground hover:opacity-80 transition-opacity"
-      >
-        Tutor<span className="font-[family-name:var(--font-orbitron)] text-primary">Network</span>
-      </Link>
+      <div className="flex items-center gap-3 min-w-0">
+        <Link
+          href="/"
+          className="text-xl font-medium text-foreground hover:opacity-80 transition-opacity shrink-0"
+        >
+          Tutor<span className="font-[family-name:var(--font-orbitron)] text-primary">Network</span>
+        </Link>
+        {contextLabel ? (
+          <span className="text-sm text-zinc-600 truncate border-l border-zinc-200 pl-3" title={contextLabel}>
+            {contextLabel}
+          </span>
+        ) : null}
+      </div>
 
       <div className="flex items-center gap-4">
         {user ? (
