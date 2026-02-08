@@ -16,11 +16,12 @@ const imageFor = (title) => {
   if (key.includes("physics")) return "/images/physics.jpg";
   if (key.includes("chem")) return "/images/chemistry.jpg";
   if (key.includes("bio")) return "/images/biology.jpg";
+  if (key.includes("science")) return "/images/science.jpg";
   if (key.includes("english")) return "/images/english.jpg";
   if (key.includes("history")) return "/images/history.jpg";
   if (key.includes("language")) return "/images/languages.jpg";
   if (key.includes("math")) return "/images/math.jpg";
-  return "/images/arts.jpg";
+  if (key.includes("arts")) return "/images/arts.jpg"
 };
 
 function generateRecommendations(answers) {
