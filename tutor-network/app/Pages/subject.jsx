@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import NavBar from "../components/NavBar";
 import BookingModal from "../components/BookingModal";
 import { createClient } from "@/lib/supabase/client";
@@ -17,11 +17,17 @@ const tutorShape = (p) => ({
 
 export default function SubjectPage({ slug }) {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const subjectConfig = getSubjectBySlug(slug);
   const coreSubject = subjectConfig?.title ?? "";
   const subSubjects = subjectConfig?.subtopics ?? [];
 
-  const [selectedId, setSelectedId] = useState(subSubjects[0]?.id ?? null);
+  // Pre-select subtopic from ?topic= query param, or default to first
+  const topicParam = searchParams.get("topic");
+  const initialId = (topicParam && subSubjects.some((s) => s.id === topicParam))
+    ? topicParam
+    : subSubjects[0]?.id ?? null;
+  const [selectedId, setSelectedId] = useState(initialId);
   const selected = useMemo(
     () => subSubjects.find((s) => s.id === selectedId) || subSubjects[0] || null,
     [selectedId, subSubjects]

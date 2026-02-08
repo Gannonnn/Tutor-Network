@@ -97,6 +97,7 @@ function buildRecommendedFromAI(recs) {
         reason: r.reason || "",
         image: imageFor(info.title),
         slug: info.slug,
+        subtopicId: info.subtopicId,
       };
     })
     .filter(Boolean);
@@ -310,7 +311,7 @@ export default function StudentHome() {
                   {recommended.map((subject) => (
                     <Link
                       key={subject.id}
-                      href={`/subject/${subject.slug}`}
+                      href={`/subject/${subject.slug}?topic=${subject.subtopicId}`}
                       className="flex-shrink-0 w-64 rounded-xl border border-zinc-200 bg-white shadow-sm hover:shadow-md transition-shadow cursor-pointer overflow-hidden block"
                     >
                       <div className="h-32 bg-zinc-100 flex items-center justify-center relative">
@@ -442,7 +443,7 @@ export default function StudentHome() {
                   {ALL_SUBTOPICS.map((st) => (
                     <Link
                       key={st.key}
-                      href={`/subject/${st.slug}`}
+                      href={`/subject/${st.slug}?topic=${st.subtopicId}`}
                       className="flex-shrink-0 w-64 rounded-xl border border-zinc-200 bg-white shadow-sm hover:shadow-md transition-shadow cursor-pointer overflow-hidden block"
                     >
                       <div className="h-32 bg-zinc-100 flex items-center justify-center relative">
