@@ -23,6 +23,18 @@ for (const config of Object.values(SUBJECTS)) {
   }
 }
 
+// Flat list of every subtopic for "All Courses" view
+const ALL_SUBTOPICS = Object.values(SUBJECTS).flatMap((config) =>
+  config.subtopics.map((st) => ({
+    key: `${config.slug}:${st.id}`,
+    slug: config.slug,
+    subtopicId: st.id,
+    parentTitle: config.title,
+    title: st.title,
+    description: st.description,
+  }))
+);
+
 // Placeholder images for cards — drop matching files into public/images/
 const imageFor = (title) => {
   const key = title.toLowerCase();
@@ -133,6 +145,8 @@ export default function StudentHome() {
     "Spaced Repitition": "Reviewing material over increasing intervals (days/weeks) to boost long‑term retention.",
     Interweaving: "Mixing different problem types/topics within a study session to improve transfer and discrimination.",
   };
+
+  const [showAllCourses, setShowAllCourses] = useState(false);
 
   const recommendedRef = useRef(null);
   const coreRef = useRef(null);
@@ -404,35 +418,73 @@ export default function StudentHome() {
               )}
             </section>
 
-            {/* Core Subjects Carousel (static showcase) */}
+            {/* Core Subjects / All Courses Carousel */}
             <section className="pt-4 pb-8 px-6">
-              <h2 className="text-2xl font-semibold text-zinc-900 mb-4">
-                Core Subjects
-              </h2>
-              <div
-                ref={coreRef}
-                className="flex gap-4 overflow-x-auto scroll-smooth pb-2"
-                style={{ scrollbarWidth: "thin", scrollbarColor: "#d4d4d8 #f4f4f5" }}
-              >
-                {CORE_SUBJECTS.map((subject) => (
-                  <Link
-                    key={subject.slug}
-                    href={`/subject/${subject.slug}`}
-                    className="flex-shrink-0 w-64 h-48 rounded-xl border border-zinc-200 bg-white shadow-sm hover:shadow-md transition-shadow cursor-pointer overflow-hidden block"
-                  >
-                    <div className="h-32 bg-zinc-100 flex items-center justify-center relative">
-                      <img
-                        src={imageFor(subject.title)}
-                        alt={subject.title}
-                        className="w-full h-full object-cover"
-                      />
-                    </div>
-                    <div className="p-4">
-                      <h3 className="text-lg font-medium text-zinc-900">{subject.title}</h3>
-                    </div>
-                  </Link>
-                ))}
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="text-2xl font-semibold text-zinc-900">
+                  {showAllCourses ? "All Courses" : "Core Subjects"}
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setShowAllCourses((v) => !v)}
+                  className="text-sm text-primary hover:underline font-medium"
+                >
+                  {showAllCourses ? "Core Subjects" : "All Courses"}
+                </button>
               </div>
+
+              {showAllCourses ? (
+                <div
+                  ref={coreRef}
+                  className="flex gap-4 overflow-x-auto scroll-smooth pb-2"
+                  style={{ scrollbarWidth: "thin", scrollbarColor: "#d4d4d8 #f4f4f5" }}
+                >
+                  {ALL_SUBTOPICS.map((st) => (
+                    <Link
+                      key={st.key}
+                      href={`/subject/${st.slug}`}
+                      className="flex-shrink-0 w-64 rounded-xl border border-zinc-200 bg-white shadow-sm hover:shadow-md transition-shadow cursor-pointer overflow-hidden block"
+                    >
+                      <div className="h-32 bg-zinc-100 flex items-center justify-center relative">
+                        <img
+                          src={imageFor(st.title)}
+                          alt={st.title}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <div className="p-3">
+                        <div className="text-xs text-zinc-500 mb-0.5">{st.parentTitle}</div>
+                        <h3 className="text-base font-medium text-zinc-900">{st.title}</h3>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              ) : (
+                <div
+                  ref={coreRef}
+                  className="flex gap-4 overflow-x-auto scroll-smooth pb-2"
+                  style={{ scrollbarWidth: "thin", scrollbarColor: "#d4d4d8 #f4f4f5" }}
+                >
+                  {CORE_SUBJECTS.map((subject) => (
+                    <Link
+                      key={subject.slug}
+                      href={`/subject/${subject.slug}`}
+                      className="flex-shrink-0 w-64 h-48 rounded-xl border border-zinc-200 bg-white shadow-sm hover:shadow-md transition-shadow cursor-pointer overflow-hidden block"
+                    >
+                      <div className="h-32 bg-zinc-100 flex items-center justify-center relative">
+                        <img
+                          src={imageFor(subject.title)}
+                          alt={subject.title}
+                          className="w-full h-full object-cover"
+                        />
+                      </div>
+                      <div className="p-4">
+                        <h3 className="text-lg font-medium text-zinc-900">{subject.title}</h3>
+                      </div>
+                    </Link>
+                  ))}
+                </div>
+              )}
             </section>
           </>
         )}
