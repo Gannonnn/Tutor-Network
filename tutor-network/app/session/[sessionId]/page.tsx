@@ -1,5 +1,7 @@
 import SessionClient from "./SessionClient";
 
+export const dynamic = "force-dynamic";
+
 interface SessionPageProps {
   params: Promise<{ sessionId: string }>;
 }
