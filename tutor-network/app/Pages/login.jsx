@@ -1,8 +1,11 @@
 "use client";
 
 import { useState } from "react";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
 
 export default function LoginPage() {
+  const router = useRouter();
   const [mode, setMode] = useState("login"); // "login" | "signup"
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -15,10 +18,15 @@ export default function LoginPage() {
     e.preventDefault();
     setMessage("");
     setLoading(true);
-    // TODO: call your auth API (e.g. signIn)
-    await new Promise((r) => setTimeout(r, 600));
-    setMessage("Login not wired to backend yet. Add your auth API here.");
+    const supabase = createClient();
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
     setLoading(false);
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    router.push("/");
+    router.refresh();
   };
 
   const handleSignup = async (e) => {
@@ -29,10 +37,19 @@ export default function LoginPage() {
       return;
     }
     setLoading(true);
-    // TODO: call your auth API (e.g. signUp / register)
-    await new Promise((r) => setTimeout(r, 600));
-    setMessage("Sign up not wired to backend yet. Add your auth API here.");
+    const supabase = createClient();
+    const { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: { data: { full_name: name } },
+    });
     setLoading(false);
+    if (error) {
+      setMessage(error.message);
+      return;
+    }
+    setMessage("Check your email to confirm your account.");
+    router.refresh();
   };
 
   return (
