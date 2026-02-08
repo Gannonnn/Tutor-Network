@@ -237,6 +237,11 @@ export default function DashboardPage() {
       other_name: booking.tutor?.full_name ?? undefined,
     }));
     
+    console.log('Loaded student events:', {
+      count: formattedEvents.length,
+      events: formattedEvents.map(e => ({ id: e.id, date: e.date, time: e.time, title: e.title }))
+    });
+    
     setEvents(formattedEvents);
   };
 
@@ -310,10 +315,22 @@ export default function DashboardPage() {
   };
 
   const handleDateClick = (date: Date) => {
+    // Clear any selected event when clicking a date
+    setSelectedEvent(null);
+    // Format date as YYYY-MM-DD using local time to avoid timezone issues
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
+    
+    console.log('handleDateClick:', {
+      clickedDate: dateStr,
+      totalEvents: events.length,
+      eventDates: events.map(e => e.date),
+      matchingEvents: events.filter((e) => e.date === dateStr).length
+    });
+    
     setSelectedDate(date);
-    const dateStr = date.toISOString().split("T")[0];
-    const dayEvents = events.filter((e) => e.date === dateStr);
-    // Show events for that day
   };
 
   const handleCreateAvailabilityClick = () => {
@@ -649,13 +666,31 @@ export default function DashboardPage() {
 
   const getEventsForDate = (date: Date | null) => {
     if (!date) return [];
-    const dateStr = date.toISOString().split("T")[0];
-    return events.filter((e) => e.date === dateStr);
+    // Format date as YYYY-MM-DD using local time to avoid timezone issues
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
+    const filtered = events.filter((e) => e.date === dateStr);
+    // Debug logging
+    if (filtered.length > 0 || events.length > 0) {
+      console.log('getEventsForDate:', {
+        selectedDate: dateStr,
+        totalEvents: events.length,
+        eventDates: events.map(e => e.date),
+        filteredCount: filtered.length
+      });
+    }
+    return filtered;
   };
 
   const getAvailabilitiesForDate = (date: Date | null) => {
     if (!date) return [];
-    const dateStr = date.toISOString().split("T")[0];
+    // Format date as YYYY-MM-DD using local time to avoid timezone issues
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    const dateStr = `${year}-${month}-${day}`;
     return availabilities.filter((a) => a.date === dateStr);
   };
 
@@ -857,6 +892,22 @@ create policy "Tutor or student can delete own bookings"
     return dateA.getTime() - dateB.getTime();
   });
 
+  const currentMonth = selectedDate;
+  const days = getDaysInMonth(currentMonth);
+  const selectedDateEvents = getEventsForDate(selectedDate);
+  const selectedDateAvailabilities = getAvailabilitiesForDate(selectedDate);
+  
+  // Debug: Log selected date events
+  useEffect(() => {
+    if (selectedDateEvents.length > 0) {
+      console.log('Selected date events:', {
+        selectedDate: `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`,
+        events: selectedDateEvents,
+        userType
+      });
+    }
+  }, [selectedDateEvents, selectedDate, userType]);
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -864,11 +915,6 @@ create policy "Tutor or student can delete own bookings"
       </div>
     );
   }
-
-  const currentMonth = selectedDate;
-  const days = getDaysInMonth(currentMonth);
-  const selectedDateEvents = getEventsForDate(selectedDate);
-  const selectedDateAvailabilities = getAvailabilitiesForDate(selectedDate);
 
   return (
     <main className="fixed inset-0 bg-background overflow-hidden flex flex-col pt-14">
@@ -1033,14 +1079,54 @@ create policy "Tutor or student can delete own bookings"
               </>
             ) : (
               <div className="flex-1 min-h-0 overflow-y-auto">
-                <p className="text-sm text-zinc-600 mb-3">
-                  {userType === "student"
-                    ? "Select an event from Upcoming Events (left) to see details and join the session. Book new sessions from a subject page or via Schedule new times with a current tutor."
-                    : "Select an event from Upcoming Events (left) to see details and join, or use the calendar to create availability."}
-                </p>
-                {userType === "student" ? null : (
-                <>
-                  {/* Show availability for selected date */}
+                {userType === "student" ? (
+                  <>
+                    {/* Show events for selected date for students */}
+                    {selectedDateEvents.length > 0 ? (
+                      <div className="space-y-3">
+                        <h3 className="text-sm font-semibold text-zinc-700">
+                          Sessions on {formatDateString(
+                            `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`
+                          )}
+                        </h3>
+                        {selectedDateEvents.map((event) => (
+                          <div
+                            key={event.id}
+                            onClick={() => setSelectedEvent(event)}
+                            className="p-3 border border-zinc-200 rounded-lg cursor-pointer hover:bg-zinc-50"
+                          >
+                            <h3 className="font-semibold mb-1 text-sm">{event.title}</h3>
+                            <p className="text-xs text-zinc-600">
+                              Date: {formatDateString(event.date)}
+                            </p>
+                            <p className="text-xs text-zinc-600">Time: {event.time}</p>
+                            {(event.subtopic_title || event.subject_slug) && (
+                              <p className="text-xs text-zinc-600 mt-1">
+                                Topic: {event.subtopic_title ?? event.subject_slug ?? "—"}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <div className="text-center py-6 flex-1 flex flex-col justify-center">
+                        <p className="text-sm text-zinc-500 mb-4">
+                          No sessions scheduled for {formatDateString(
+                            `${selectedDate.getFullYear()}-${String(selectedDate.getMonth() + 1).padStart(2, '0')}-${String(selectedDate.getDate()).padStart(2, '0')}`
+                          )}
+                        </p>
+                        <p className="text-xs text-zinc-600">
+                          Book new sessions from a subject page or via Schedule new times with a current tutor.
+                        </p>
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <>
+                    <p className="text-sm text-zinc-600 mb-3">
+                      Select an event from Upcoming Events (left) to see details and join, or use the calendar to create availability.
+                    </p>
+                    {/* Show availability for selected date */}
                   {selectedDateAvailabilities.length > 0 && (
                     <div className="mb-4 space-y-2">
                       <h3 className="text-sm font-semibold text-zinc-700">
@@ -1165,7 +1251,7 @@ create policy "Tutor or student can delete own bookings"
                       Create Availability
                     </button>
                   )}
-                </>
+                  </>
                 )}
               </div>
             )}
