@@ -8,6 +8,7 @@ import type { AuthUser } from "@supabase/supabase-js";
 import BookingModal from "@/app/components/BookingModal";
 import AvailabilityModal from "@/app/components/AvailabilityModal";
 import ConfirmModal from "@/app/components/ConfirmModal";
+import Toast from "@/app/components/Toast";
 
 type Availability = {
   id: string;
@@ -91,6 +92,19 @@ export default function DashboardPage() {
     message: "",
     onConfirm: () => {},
   });
+  const [toast, setToast] = useState<{
+    isOpen: boolean;
+    message: string;
+    type: "success" | "error" | "info";
+  }>({
+    isOpen: false,
+    message: "",
+    type: "success",
+  });
+
+  const showToast = (message: string, type: "success" | "error" | "info" = "success") => {
+    setToast({ isOpen: true, message, type });
+  };
 
   const supabase = createClient();
 
@@ -326,7 +340,7 @@ export default function DashboardPage() {
           .eq("tutor_id", user.id);
 
         if (error) {
-          alert(`Error deleting availability: ${error.message}`);
+          showToast(`Error deleting availability: ${error.message}`, "error");
           return;
         }
 
@@ -335,7 +349,7 @@ export default function DashboardPage() {
           await loadTutorEvents(supabase, user.id);
         }
         
-        alert("Availability deleted successfully.");
+        showToast("Availability deleted successfully.", "success");
       },
     });
   };
@@ -344,7 +358,7 @@ export default function DashboardPage() {
     if (!user || userType !== "tutor") return;
 
     if (isBooked) {
-      alert("Cannot delete a time slot that is already booked. Please cancel the booking first.");
+      showToast("Cannot delete a time slot that is already booked. Please cancel the booking first.", "error");
       return;
     }
 
@@ -367,7 +381,7 @@ export default function DashboardPage() {
           .single();
 
         if (fetchError || !availability) {
-          alert("Error loading availability. Please try again.");
+          showToast("Error loading availability. Please try again.", "error");
           return;
         }
 
@@ -385,7 +399,7 @@ export default function DashboardPage() {
             .eq("tutor_id", user.id);
 
           if (deleteError) {
-            alert(`Error deleting availability: ${deleteError.message}`);
+            showToast(`Error deleting availability: ${deleteError.message}`, "error");
             return;
           }
         } else {
@@ -396,7 +410,7 @@ export default function DashboardPage() {
             .eq("tutor_id", user.id);
 
           if (updateError) {
-            alert(`Error updating availability: ${updateError.message}`);
+            showToast(`Error updating availability: ${updateError.message}`, "error");
             return;
           }
         }
@@ -436,11 +450,11 @@ export default function DashboardPage() {
         .eq("id", existing.id);
       
       if (error) {
-        alert(`Error updating availability: ${error.message}`);
+        showToast(`Error updating availability: ${error.message}`, "error");
         return;
       }
       
-      alert(`Availability updated for ${formatDateString(dateStr)}`);
+      showToast(`Availability updated for ${formatDateString(dateStr)}`, "success");
     } else {
       // Create new availability with sorted slots
       const { error } = await supabase
@@ -452,11 +466,11 @@ export default function DashboardPage() {
         });
       
       if (error) {
-        alert(`Error creating availability: ${error.message}`);
+        showToast(`Error creating availability: ${error.message}`, "error");
         return;
       }
       
-      alert(`Availability created for ${formatDateString(dateStr)}`);
+      showToast(`Availability created for ${formatDateString(dateStr)}`, "success");
     }
     
     // Reload availabilities and events
@@ -481,7 +495,7 @@ export default function DashboardPage() {
 
     // Check if the time slot is still available
     if (!availability.time_slots.includes(timeSlot)) {
-      alert("This time slot is no longer available. Please select another time.");
+      showToast("This time slot is no longer available. Please select another time.", "error");
       await loadStudentAvailabilities(supabase, user.id);
       return;
     }
@@ -497,7 +511,7 @@ export default function DashboardPage() {
       .maybeSingle();
     
     if (existingBooking) {
-      alert("This time slot is already booked. Please select another time.");
+      showToast("This time slot is already booked. Please select another time.", "error");
       await loadStudentAvailabilities(supabase, user.id);
       return;
     }
@@ -519,7 +533,7 @@ export default function DashboardPage() {
       .single();
     
     if (bookingError) {
-      alert(`Error creating booking: ${bookingError.message}`);
+      showToast(`Error creating booking: ${bookingError.message}`, "error");
       return;
     }
     
@@ -554,7 +568,7 @@ export default function DashboardPage() {
       await loadStudentEvents(supabase, user.id);
       await loadStudentAvailabilities(supabase, user.id);
     }
-    alert(`Booking confirmed for ${availability.date} at ${timeSlot}`);
+    showToast(`Booking confirmed for ${availability.date} at ${timeSlot}`, "success");
   };
 
   const loadStudentAvailabilities = async (
@@ -682,7 +696,7 @@ export default function DashboardPage() {
 
   const handleDeleteMeeting = (event: Event) => {
     if (!user || !event.booking_id) {
-      alert("Missing user or booking ID. Please try again.");
+      showToast("Missing user or booking ID. Please try again.", "error");
       return;
     }
     
@@ -715,7 +729,7 @@ export default function DashboardPage() {
 
     if (bookingError || !booking) {
       console.error("Error loading booking:", bookingError);
-      alert(`Error loading booking: ${bookingError?.message || "Booking not found"}. Please try again.`);
+      showToast(`Error loading booking: ${bookingError?.message || "Booking not found"}. Please try again.`, "error");
       return;
     }
 
@@ -723,7 +737,7 @@ export default function DashboardPage() {
 
     // Verify user has permission to delete (must be tutor or student for this booking)
     if (booking.tutor_id !== user.id && booking.student_id !== user.id) {
-      alert("You don't have permission to delete this booking.");
+      showToast("You don't have permission to delete this booking.", "error");
       return;
     }
 
@@ -754,7 +768,7 @@ export default function DashboardPage() {
           await loadTutorEvents(supabase, user.id);
         }
       }
-      alert(`Error deleting booking: ${deleteError.message}. Please check your database permissions.`);
+      showToast(`Error deleting booking: ${deleteError.message}. Please check your database permissions.`, "error");
       return;
     }
 
@@ -775,7 +789,7 @@ create policy "Tutor or student can delete own bookings"
           await loadTutorEvents(supabase, user.id);
         }
       }
-      alert("Failed to delete booking. This is likely a database permissions issue. Please check the browser console for instructions on how to fix this.");
+      showToast("Failed to delete booking. This is likely a database permissions issue. Please check the browser console for instructions on how to fix this.", "error");
       return;
     }
 
@@ -834,7 +848,7 @@ create policy "Tutor or student can delete own bookings"
       // Don't show error to user since deletion succeeded
     }
     
-    alert("Meeting cancelled successfully.");
+    showToast("Meeting cancelled successfully.", "success");
   };
 
   const sortedEvents = [...events].sort((a, b) => {
@@ -1293,6 +1307,13 @@ create policy "Tutor or student can delete own bookings"
         variant={confirmModal.variant}
         onConfirm={confirmModal.onConfirm}
         onCancel={() => setConfirmModal({ ...confirmModal, isOpen: false })}
+      />
+
+      <Toast
+        isOpen={toast.isOpen}
+        message={toast.message}
+        type={toast.type}
+        onClose={() => setToast({ ...toast, isOpen: false })}
       />
     </main>
   );
