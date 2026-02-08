@@ -32,6 +32,7 @@ export default function RootLayout({
     <html lang="en">
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${orbitron.variable} antialiased`}
+        suppressHydrationWarning
       >
         <NavBar />
         <div className="pt-14">{children}</div>

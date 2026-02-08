@@ -17,7 +17,7 @@ const coreSubjects = [
   { id: 2, title: "Science", image: "/images/science.jpg" },
   { id: 3, title: "English", image: "/images/english.jpg" },
   { id: 4, title: "History", image: "/images/history.jpg" },
-  { id: 5, title: "Foreign Languages", image: "/images/languages.jpg" },
+  { id: 5, title: "Languages", image: "/images/languages.jpg" },
   { id: 6, title: "Arts", image: "/images/arts.jpg" },
 ];
 
