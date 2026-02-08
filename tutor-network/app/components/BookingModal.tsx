@@ -37,6 +37,35 @@ export default function BookingModal({
 
   const supabase = createClient();
 
+  // Prevent tutors from booking with other tutors
+  useEffect(() => {
+    const checkUserType = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      
+      const userType = user.user_metadata?.user_type;
+      if (userType === "tutor") {
+        onClose();
+        return;
+      }
+      
+      // Also check profile if not in metadata
+      if (!userType) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("user_type")
+          .eq("id", user.id)
+          .single();
+        
+        if (profile?.user_type === "tutor") {
+          onClose();
+          return;
+        }
+      }
+    };
+    checkUserType();
+  }, [supabase, onClose]);
+
   useEffect(() => {
     const load = async () => {
       const { data, error: e } = await supabase

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import Link from "next/link";
 import NavBar from "../components/NavBar";
 import { createClient } from "@/lib/supabase/client";
@@ -89,6 +90,7 @@ function generateRecommendations(answers) {
 }
 
 export default function StudentHome() {
+  const router = useRouter();
   const supabase = useMemo(() => createClient(), []);
   const [loading, setLoading] = useState(true);
   const [user, setUser] = useState(null);
@@ -126,11 +128,33 @@ export default function StudentHome() {
       setError("");
       try {
         const { data: { user: u } } = await supabase.auth.getUser();
-        setUser(u || null);
         if (!u) {
           setLoading(false);
           return;
         }
+        
+        // Check if user is a tutor - tutors cannot access student-home page
+        const userType = u.user_metadata?.user_type;
+        if (userType === "tutor") {
+          router.push("/dashboard");
+          return;
+        }
+        
+        // Also check profile if not in metadata
+        if (!userType) {
+          const { data: profile } = await supabase
+            .from("profiles")
+            .select("user_type")
+            .eq("id", u.id)
+            .single();
+          
+          if (profile?.user_type === "tutor") {
+            router.push("/dashboard");
+            return;
+          }
+        }
+        
+        setUser(u);
         const { data, error: qErr } = await supabase
           .from("questionnaires")
           .select("answers")
