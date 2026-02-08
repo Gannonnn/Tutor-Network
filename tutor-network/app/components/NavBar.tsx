@@ -59,7 +59,7 @@ export default function NavBar({ contextLabel }: { contextLabel?: string }) {
       <div className="flex items-center gap-3 min-w-0">
         <Link
           href="/"
-          className="text-xl font-medium text-foreground hover:opacity-80 transition-opacity shrink-0"
+          className="text-xl font-[family-name:var(--font-orbitron)] text-foreground hover:opacity-80 transition-opacity shrink-0"
         >
           Tutor<span className="font-[family-name:var(--font-orbitron)] text-primary">Network</span>
         </Link>

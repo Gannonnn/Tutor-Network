@@ -72,17 +72,31 @@ export default function SubjectPage({ slug }) {
   const [aiError, setAiError] = useState("");
 
   const queryAiForResources = async () => {
+    if (!selected || !coreSubject) return;
     setAiOpen(true);
     setAiLoading(true);
     setAiError("");
     setAiResults([]);
     try {
-      await new Promise((r) => setTimeout(r, 900));
-      setAiResults([
-        { title: `${selected?.title} Crash Course (YouTube)`, url: "https://www.youtube.com/results?search_query=" + encodeURIComponent(`${selected?.title} basics`), note: "Free video series to get started quickly." },
-        { title: `${selected?.title} Practice Problems (Khan Academy)`, url: "https://www.khanacademy.org/", note: "Exercises with step-by-step hints." },
-        { title: `${selected?.title} Reference (OpenStax)`, url: "https://openstax.org/subjects/math", note: "Free, open textbooks and chapters." },
-      ]);
+      const res = await fetch("/api/subject-resources", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          subjectTitle: coreSubject,
+          topicTitle: selected.title,
+          topicDescription: selected.description || "",
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setAiError(data?.error ?? "Failed to fetch resources. Please try again.");
+        return;
+      }
+      if (data.resources?.length) {
+        setAiResults(data.resources);
+      } else {
+        setAiError("No resources returned. Try again.");
+      }
     } catch (e) {
       setAiError("Failed to fetch resources. Please try again.");
     } finally {
