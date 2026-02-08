@@ -80,12 +80,8 @@ create table if not exists public.tutor_subjects (
   unique (tutor_id, subject_slug, subtopic_id)
 );
 
--- If table already existed without subtopic_id, run:
--- alter table public.tutor_subjects add column if not exists subtopic_id text;
--- alter table public.tutor_subjects drop constraint if exists tutor_subjects_tutor_id_subject_slug_key;
--- alter table public.tutor_subjects add constraint tutor_subjects_tutor_id_subject_slug_subtopic_id_key unique (tutor_id, subject_slug, subtopic_id);
--- update public.tutor_subjects set subtopic_id = subject_slug where subtopic_id is null;
--- alter table public.tutor_subjects alter column subtopic_id set not null;
+-- If you get "duplicate key ... tutor_subjects_tutor_id_subject_slug_key", run:
+--   supabase/fix-tutor-subjects-constraint.sql  in the Supabase SQL Editor.
 
 alter table public.tutor_subjects enable row level security;
 
