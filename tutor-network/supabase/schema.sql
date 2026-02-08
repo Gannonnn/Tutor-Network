@@ -11,6 +11,34 @@
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
+-- 0. Questionnaires table (AI recommendations stored alongside answers)
+-- -----------------------------------------------------------------------------
+create table if not exists public.questionnaires (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  answers jsonb not null default '{}',
+  recommendations jsonb,
+  updated_at timestamptz not null default now()
+);
+
+-- Add recommendations column if table already existed
+alter table public.questionnaires add column if not exists recommendations jsonb;
+
+alter table public.questionnaires enable row level security;
+
+create policy "Users can view own questionnaire"
+  on public.questionnaires for select
+  using (auth.uid() = user_id);
+
+create policy "Users can upsert own questionnaire"
+  on public.questionnaires for insert
+  with check (auth.uid() = user_id);
+
+create policy "Users can update own questionnaire"
+  on public.questionnaires for update
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+-- -----------------------------------------------------------------------------
 -- 1. Extend profiles (add columns if missing)
 -- -----------------------------------------------------------------------------
 alter table public.profiles

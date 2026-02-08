@@ -9,6 +9,20 @@ import { SUBJECTS } from "@/lib/subjects";
 
 const CORE_SUBJECTS = Object.values(SUBJECTS);
 
+// Build a lookup map: "subject_slug:subtopic_id" → { title, description, slug }
+const SUBTOPIC_MAP = {};
+for (const config of Object.values(SUBJECTS)) {
+  for (const st of config.subtopics) {
+    SUBTOPIC_MAP[`${config.slug}:${st.id}`] = {
+      parentTitle: config.title,
+      title: st.title,
+      description: st.description,
+      slug: config.slug,
+      subtopicId: st.id,
+    };
+  }
+}
+
 // Placeholder images for cards — drop matching files into public/images/
 const imageFor = (title) => {
   const key = title.toLowerCase();
@@ -55,21 +69,34 @@ const imageFor = (title) => {
   return "/images/arts.jpg";
 };
 
-function generateRecommendations(answers) {
-  // Very simple rule-based recommendations as a stand-in for AI
-  const subjects = new Set();
-  const methods = new Set();
+// Convert AI recommendations (from Supabase) into displayable objects
+function buildRecommendedFromAI(recs) {
+  if (!Array.isArray(recs)) return [];
+  return recs
+    .map((r) => {
+      const key = `${r.subject_slug}:${r.subtopic_id}`;
+      const info = SUBTOPIC_MAP[key];
+      if (!info) return null;
+      return {
+        id: key,
+        title: info.title,
+        parentTitle: info.parentTitle,
+        description: info.description,
+        reason: r.reason || "",
+        image: imageFor(info.title),
+        slug: info.slug,
+      };
+    })
+    .filter(Boolean);
+}
 
-  const fav = (answers?.favoriteSubjects || "").split(/,|;/).map((s) => s.trim()).filter(Boolean);
-  const struggle = (answers?.strugglingSubjects || "").split(/,|;/).map((s) => s.trim()).filter(Boolean);
-  const level = answers?.currentLevel || "On track";
+// Simple rule-based study method recommendations (kept as companion to AI subject recs)
+function generateStudyMethods(answers) {
+  const methods = new Set();
   const helpType = answers?.helpType || "Understanding concepts";
   const learn = (answers?.learningBest || "").toLowerCase();
+  const level = answers?.currentLevel || "On track";
 
-  struggle.forEach((s) => subjects.add(s));
-  if (fav.length) subjects.add(fav[0]);
-
-  // Derive methods by helpType and learning style
   if (helpType.includes("Homework")) methods.add("Targeted homework walkthroughs 2–3x/week");
   if (helpType.includes("Understanding")) methods.add("Concept-first lessons with summaries");
   if (helpType.includes("Test")) methods.add("Timed practice tests + error logs");
@@ -84,9 +111,7 @@ function generateRecommendations(answers) {
   if (level.includes("A little behind")) methods.add("Weekly check-ins and gap-filling exercises");
   if (level.includes("Want a challenge")) methods.add("Extension problems and enrichment resources");
 
-  const recSubjects = Array.from(subjects).slice(0, 8).map((title, idx) => ({ id: idx + 1, title, image: imageFor(title) }));
-  const recMethods = Array.from(methods);
-  return { recSubjects, recMethods };
+  return Array.from(methods);
 }
 
 export default function StudentHome() {
@@ -157,16 +182,40 @@ export default function StudentHome() {
         setUser(u);
         const { data, error: qErr } = await supabase
           .from("questionnaires")
-          .select("answers")
+          .select("answers, recommendations")
           .eq("user_id", u.id)
           .maybeSingle();
         if (qErr) throw qErr;
         setAnswers(data?.answers || null);
         if (data?.answers) {
-          // simulate AI generation quickly
-          const { recSubjects, recMethods } = generateRecommendations(data.answers);
-          setRecommended(recSubjects);
-          setStudyMethods(recMethods);
+          // Load AI recommendations if they exist
+          if (data.recommendations?.length > 0) {
+            setRecommended(buildRecommendedFromAI(data.recommendations));
+          } else {
+            // No recommendations yet — generate them now
+            try {
+              setGenLoading(true);
+              const res = await fetch("/api/recommend", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ answers: data.answers }),
+              });
+              const aiData = await res.json();
+              if (aiData.recommendations?.length > 0) {
+                setRecommended(buildRecommendedFromAI(aiData.recommendations));
+                // Persist to Supabase for next load
+                await supabase
+                  .from("questionnaires")
+                  .update({ recommendations: aiData.recommendations, updated_at: new Date().toISOString() })
+                  .eq("user_id", u.id);
+              }
+            } catch (aiErr) {
+              console.error("AI recommendation failed:", aiErr);
+            } finally {
+              setGenLoading(false);
+            }
+          }
+          setStudyMethods(generateStudyMethods(data.answers));
         }
       } catch (e) {
         setError(e?.message || "Failed to load data");
@@ -179,15 +228,29 @@ export default function StudentHome() {
 
 
   const regenerate = async () => {
-    if (!answers) return;
+    if (!answers || !user) return;
     setGenLoading(true);
-    // Simulate async AI call
-    setTimeout(() => {
-      const { recSubjects, recMethods } = generateRecommendations(answers);
-      setRecommended(recSubjects);
-      setStudyMethods(recMethods);
+    try {
+      const res = await fetch("/api/recommend", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ answers }),
+      });
+      const data = await res.json();
+      if (data.recommendations?.length > 0) {
+        setRecommended(buildRecommendedFromAI(data.recommendations));
+        // Persist new recommendations to Supabase
+        await supabase
+          .from("questionnaires")
+          .update({ recommendations: data.recommendations, updated_at: new Date().toISOString() })
+          .eq("user_id", user.id);
+      }
+      setStudyMethods(generateStudyMethods(answers));
+    } catch (err) {
+      console.error("Refresh recommendations failed:", err);
+    } finally {
       setGenLoading(false);
-    }, 500);
+    }
   };
 
 
@@ -231,9 +294,10 @@ export default function StudentHome() {
                   style={{ scrollbarWidth: "thin", scrollbarColor: "#d4d4d8 #f4f4f5" }}
                 >
                   {recommended.map((subject) => (
-                    <div
+                    <Link
                       key={subject.id}
-                      className="flex-shrink-0 w-64 h-48 rounded-xl border border-zinc-200 bg-white shadow-sm hover:shadow-md transition-shadow cursor-pointer overflow-hidden"
+                      href={`/subject/${subject.slug}`}
+                      className="flex-shrink-0 w-64 rounded-xl border border-zinc-200 bg-white shadow-sm hover:shadow-md transition-shadow cursor-pointer overflow-hidden block"
                     >
                       <div className="h-32 bg-zinc-100 flex items-center justify-center relative">
                         <img
@@ -242,10 +306,14 @@ export default function StudentHome() {
                           className="w-full h-full object-cover"
                         />
                       </div>
-                      <div className="p-4">
-                        <h3 className="text-lg font-medium text-zinc-900">{subject.title}</h3>
+                      <div className="p-3">
+                        <div className="text-xs text-zinc-500 mb-0.5">{subject.parentTitle}</div>
+                        <h3 className="text-base font-medium text-zinc-900">{subject.title}</h3>
+                        {subject.reason && (
+                          <p className="text-xs text-zinc-500 mt-1 line-clamp-2">{subject.reason}</p>
+                        )}
                       </div>
-                    </div>
+                    </Link>
                   ))}
                 </div>
               )}

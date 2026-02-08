@@ -144,6 +144,7 @@ export default function QuestionnairePage() {
         extraNotes,
       };
 
+      // 1. Save answers to Supabase
       const { error: upErr } = await supabase
         .from("questionnaires")
         .upsert(
@@ -156,11 +157,34 @@ export default function QuestionnairePage() {
         );
       if (upErr) throw upErr;
 
-      setSuccess("Saved! Redirecting to your home page…");
-      // Small delay for UX
+      // 2. Call Groq to generate recommendations
+      setSuccess("Saved! Generating personalized recommendations…");
+      try {
+        const res = await fetch("/api/recommend", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ answers }),
+        });
+        const data = await res.json();
+        if (data.recommendations?.length > 0) {
+          // 3. Save recommendations to Supabase
+          await supabase
+            .from("questionnaires")
+            .update({
+              recommendations: data.recommendations,
+              updated_at: new Date().toISOString(),
+            })
+            .eq("user_id", userId);
+        }
+      } catch (aiErr) {
+        // If AI fails, still redirect — recommendations can be generated later
+        console.error("AI recommendation failed:", aiErr);
+      }
+
+      setSuccess("Done! Redirecting to your home page…");
       setTimeout(() => {
         window.location.href = "/student-home";
-      }, 700);
+      }, 500);
     } catch (e) {
       setError(e?.message || "Failed to save your responses.");
     } finally {
