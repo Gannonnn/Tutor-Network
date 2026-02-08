@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
@@ -15,6 +15,7 @@ export default function LoginPage() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
+
   const handleLogin = async (e) => {
     e.preventDefault();
     setMessage("");
@@ -26,7 +27,7 @@ export default function LoginPage() {
       setMessage(error.message);
       return;
     }
-    router.push("/");
+    router.push("/student-home");
     router.refresh();
   };
 
@@ -43,7 +44,7 @@ export default function LoginPage() {
     }
     setLoading(true);
     const supabase = createClient();
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: { 
@@ -58,12 +59,18 @@ export default function LoginPage() {
       setMessage(error.message);
       return;
     }
-    setMessage("Check your email to confirm your account.");
-    router.refresh();
+    if (data.user) {
+      setMessage("Account created successfully! Redirecting...");
+      // Redirect to student home page after successful signup
+      router.push("/student-home");
+      router.refresh();
+    } else {
+      setMessage("Check your email to confirm your account.");
+    }
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-white px-4">
+    <div className="flex min-h-screen items-center justify-center bg-white px-4 py-8">
       <div className="w-full max-w-sm rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm">
         <div className="mb-8 text-center">
           <h1 className="text-2xl font-[family-name:var(--font-orbitron)] tracking-tight text-zinc-900">
